@@ -122,7 +122,7 @@ export function buildSimulationRoute(route: RoutePreviewResponse): SimulationRou
   };
 }
 
-function positionAt(model: SimulationRoute, traveledMeters: number): Coordinate {
+export function simulationPositionAtDistance(model: SimulationRoute, traveledMeters: number): Coordinate {
   if (traveledMeters <= 0) return { ...model.geometry[0] };
   if (traveledMeters >= model.distanceMeters) return { ...model.geometry[model.geometry.length - 1] };
   const target = traveledMeters / model.distanceMeters * model.geometryLength;
@@ -154,7 +154,7 @@ export function sampleSimulation(model: SimulationRoute, elapsedSeconds: number)
   const traveledMeters = finished ? model.distanceMeters
     : segment.startMeters + fraction * (segment.endMeters - segment.startMeters);
   return {
-    position: positionAt(model, traveledMeters),
+    position: simulationPositionAtDistance(model, traveledMeters),
     instruction: finished ? model.arrivalInstruction : segment.instruction,
     nextInstruction: finished ? null : model.segments[index + 1]?.instruction ?? model.arrivalInstruction,
     stepIndex: finished ? model.stepCount - 1 : segment.stepIndex,

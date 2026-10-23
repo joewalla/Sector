@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Polyline } from 'react-native-svg';
+import Svg, { Circle, Polyline, Text as SvgText, G } from 'react-native-svg';
 import type { RoutePreviewResponse } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 
@@ -11,10 +11,13 @@ export default function RouteMapPreview({
   route,
   destinationName,
   position,
+  sectorBoundaries,
 }: {
   route: RoutePreviewResponse;
   destinationName: string;
   position?: { latitude: number; longitude: number } | null;
+  /** Simulation-only internal sector boundaries (S1, S2). Destination is the final sector end. */
+  sectorBoundaries?: { id: number; position: { latitude: number; longitude: number } }[];
 }) {
   const colors = useColors();
   const longitudes = route.geometry.map((point) => point.longitude);
@@ -45,6 +48,16 @@ export default function RouteMapPreview({
         <Polyline points={points} fill="none" stroke={colors.primary} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
         <Circle cx={start[0]} cy={start[1]} r={8} fill="#7FC8FF" stroke="#080B09" strokeWidth={3} />
         <Circle cx={end[0]} cy={end[1]} r={8} fill="#C9F36A" stroke="#080B09" strokeWidth={3} />
+        {sectorBoundaries?.map((b) => {
+          const bx = PADDING + ((b.position.longitude - minLongitude) / longitudeSpan) * (WIDTH - PADDING * 2);
+          const by = HEIGHT - PADDING - ((b.position.latitude - minLatitude) / latitudeSpan) * (HEIGHT - PADDING * 2);
+          return (
+            <G key={b.id}>
+              <Circle cx={bx} cy={by} r={6} fill={colors.background} stroke={colors.signalBlue} strokeWidth={2.5} />
+              <SvgText x={bx + 9} y={by - 7} fill={colors.signalBlue} fontSize={10} fontWeight="700">{`S${b.id}`}</SvgText>
+            </G>
+          );
+        })}
         {marker ? (
           <>
             <Circle cx={marker.x} cy={marker.y} r={14} fill={colors.primary} opacity={0.22} />

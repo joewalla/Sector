@@ -29,7 +29,7 @@ Sector is a native navigation and journey-performance app that records real trip
 - `artifacts/sector/app/` — mobile screens and navigation
 - `artifacts/sector/constants/colors.ts` — Sector visual tokens
 - `artifacts/sector/recent-searches.ts` — on-device recent search storage
-- `artifacts/api-server/` — shared Express API (not needed by the Stage 1 mobile app)
+- `artifacts/api-server/` — shared Express API for Mapbox destination search and route previews
 
 ## Architecture decisions
 
@@ -41,7 +41,8 @@ Sector is a native navigation and journey-performance app that records real trip
 ## Product
 
 - Stage 1 provides branded home, destination-entry, inactive navigation, results, history, personal-best, and location-privacy screens.
-- Stage 1 saves only destination text the user explicitly saves; it does not geocode, route, request location, or create trips.
+- Destination search and route previews use Mapbox through the API; previewing from the user's position requests foreground location once. The fixed London demo requires no location.
+- Route simulation includes three equal-distance practice sectors and exact estimated split times. Replay comparisons are in-memory only for the same route response, never real journey records or personal bests.
 
 ## User preferences
 

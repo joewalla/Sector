@@ -6,10 +6,13 @@ export default function RouteMapPreview({
   route,
   destinationName,
   position,
+  sectorBoundaries,
 }: {
   route: RoutePreviewResponse;
   destinationName: string;
   position?: { latitude: number; longitude: number } | null;
+  /** Simulation-only internal sector boundaries (S1, S2). Destination is the final sector end. */
+  sectorBoundaries?: { id: number; position: { latitude: number; longitude: number } }[];
 }) {
   const colors = useColors();
   const longitudes = route.geometry.map((point) => point.longitude);
@@ -39,6 +42,16 @@ export default function RouteMapPreview({
       />
       <Marker coordinate={route.geometry[0]} title="Your starting point" pinColor="#7FC8FF" />
       <Marker coordinate={route.geometry[route.geometry.length - 1]} title={destinationName} pinColor="#C9F36A" />
+      {sectorBoundaries?.map((b) => (
+        <Marker
+          key={`sector-${b.id}`}
+          coordinate={{ latitude: b.position.latitude, longitude: b.position.longitude }}
+          title={`S${b.id} boundary`}
+          description="Simulated sector boundary"
+          pinColor={colors.signalBlue}
+          tracksViewChanges={false}
+        />
+      ))}
       {position ? (
         <Marker
           coordinate={{ latitude: position.latitude, longitude: position.longitude }}

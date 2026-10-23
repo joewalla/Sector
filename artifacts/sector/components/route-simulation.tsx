@@ -8,6 +8,8 @@ import { useColors } from '@/hooks/useColors';
 import { Eyebrow, InfoPanel } from '@/components/sector-ui';
 import RouteMapPreview from './route-map-preview';
 import { buildSimulationRoute, sampleSimulation } from '@/simulation/route-simulation';
+import { buildSimulationSectors, sampleSectorSplits } from '@/simulation/sector-timing';
+import SimulationSectorSplits from './simulation-sector-splits';
 
 type Status = 'idle' | 'running' | 'paused' | 'finished' | 'ended';
 const SPEEDS = [1, 20, 60, 120] as const;
@@ -42,6 +44,10 @@ export default function RouteSimulation({
     }
   }, [route]);
   const model = built.model;
+  const sectors = useMemo(() => model ? buildSimulationSectors(model, 3) : null, [model]);
+  // Memory-only practice comparison. Cleared on unmount (parent keys this component by route).
+  const [lastCompleted, setLastCompleted] = useState<number[] | null>(null);
+  const [baseline, setBaseline] = useState<number[] | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [speed, setSpeed] = useState<Speed>(20);
   const [elapsed, setElapsed] = useState(0);
@@ -56,14 +62,14 @@ export default function RouteSimulation({
     setStatus(next);
   }, []);
 
-  // Playback timer: wall-clock delta scaled by speed, cleared on any status change/unmount.
+  // Monotonic playback clock; changing the device's date must not affect practice splits.
   useEffect(() => {
     if (status !== 'running' || !model) return;
-    let last = Date.now();
+    let last = performance.now();
     const id = setInterval(() => {
       // Synchronous guard: autoPause flips the ref before React re-renders and clears this interval.
       if (statusRef.current !== 'running') return;
-      const now = Date.now();
+      const now = performance.now();
       const delta = ((now - last) / 1000) * speedRef.current;
       last = now;
       const next = Math.min(model.durationSeconds, elapsedRef.current + delta);
@@ -71,11 +77,16 @@ export default function RouteSimulation({
       setElapsed(next);
       if (sampleSimulation(model, next).finished) {
         go('finished');
+        if (sectors) {
+          // Analytical boundary times from elapsed, independent of tick timing and playback rate.
+          const final = sampleSectorSplits(sectors, model.durationSeconds);
+          if (final.every((x) => x.status === 'complete')) setLastCompleted(final.map((x) => x.splitSeconds));
+        }
         if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       }
     }, TICK_MS);
     return () => clearInterval(id);
-  }, [status, model, go]);
+  }, [status, model, sectors, go]);
 
   const autoPause = useCallback(() => {
     if (statusRef.current === 'running') {
@@ -104,6 +115,11 @@ export default function RouteSimulation({
   }, [autoPause]);
 
   const sample = useMemo(() => (model ? sampleSimulation(model, elapsed) : null), [model, elapsed]);
+  const splits = useMemo(() => (sectors ? sampleSectorSplits(sectors, elapsed) : null), [sectors, elapsed]);
+  const boundaries = useMemo(
+    () => sectors?.slice(0, -1).map((x) => ({ id: x.id, position: x.endPosition })) ?? undefined,
+    [sectors],
+  );
   const active = status === 'running' || status === 'paused';
   const done = status === 'finished' || status === 'ended';
 
@@ -123,6 +139,8 @@ export default function RouteSimulation({
 
   const start = () => {
     tap();
+    // Only a fully completed replay becomes the baseline; partial runs never overwrite it.
+    if (lastCompleted) setBaseline(lastCompleted);
     elapsedRef.current = 0;
     setElapsed(0);
     setAutoPaused(false);
@@ -161,6 +179,7 @@ export default function RouteSimulation({
             <Text style={[styles.primaryText, { color: colors.primaryForeground }]}>Start simulation</Text>
             <Feather name="play" size={17} color={colors.primaryForeground} />
           </Pressable>
+          {splits ? <SimulationSectorSplits splits={splits} baseline={lastCompleted} mode="idle" /> : null}
         </View>
       ) : null}
 
@@ -207,14 +226,14 @@ export default function RouteSimulation({
             </View>
           </View>
 
-          <RouteMapPreview route={route} destinationName={destinationName} position={sample.position} />
-
+          <RouteMapPreview route={route} destinationName={destinationName} position={sample.position} sectorBoundaries={boundaries} />
           <SpeedPicker speed={speed} onChange={setSpeed} />
           <View style={styles.controls}>
             <Control icon={status === 'running' ? 'pause' : 'play'} label={status === 'running' ? 'Pause' : 'Resume'} onPress={togglePause} primary testID="simulation-toggle" />
             <Control icon="rotate-ccw" label="Restart" onPress={start} testID="simulation-restart" />
             <Control icon="square" label="End early" onPress={endEarly} danger testID="simulation-end" />
           </View>
+          {splits ? <SimulationSectorSplits splits={splits} baseline={baseline} mode="active" /> : null}
         </>
       ) : null}
 
@@ -231,6 +250,7 @@ export default function RouteSimulation({
             <Metric value={clock(elapsed)} label="simulated route time" />
             <Metric value={`${pct.toFixed(1)}%`} label="of route covered" />
           </View>
+          {splits ? <SimulationSectorSplits splits={splits} baseline={baseline} mode="done" /> : null}
           {status === 'ended' ? (
             <Text style={[styles.body, { color: colors.mutedForeground }]}>
               {miles(sample.remainingMeters)} and about {clock(sample.remainingSeconds)} of the Mapbox estimate were not simulated.
