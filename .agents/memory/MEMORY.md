@@ -1,0 +1,1 @@
+- [Expo workspace dependency alignment](expo-workspace-dependencies.md) — run a root install after changing React; filtered installs can leave shared-library peer links stale.

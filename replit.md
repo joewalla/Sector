@@ -16,7 +16,7 @@ Sector is a native navigation and journey-performance app that records real trip
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript
-- Mobile: Expo SDK 57, React Native, Expo Router
+- Mobile: Expo SDK 58, React Native, Expo Router
 - Local mobile persistence: AsyncStorage for the first-stage search history
 - API: Express 5
 - DB: PostgreSQL + Drizzle ORM
@@ -52,7 +52,7 @@ Sector is a native navigation and journey-performance app that records real trip
 
 ## Gotchas
 
-- The current Expo scaffold is SDK 57. The `@rnmapbox/navigation` bridge is still alpha, and its docs report the Expo config plugin tested only with SDK 58; re-check compatibility before installing native navigation dependencies.
+- The app targets Expo SDK 58. The `@rnmapbox/navigation` bridge is still alpha; the SDK upgrade alone does not establish native navigation compatibility. Re-check the bridge before adding it.
 - A real navigation build will require a development build and physical iPhone validation; Expo Go alone is not sufficient for custom native navigation modules.
 
 ## Pointers

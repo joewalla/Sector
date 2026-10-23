@@ -2,7 +2,7 @@ import React from 'react';
 import { Feather } from '@expo/vector-icons';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs } from 'expo-router';
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { NativeTabs } from 'expo-router/native-tabs';
 import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SymbolView } from 'expo-symbols';
@@ -68,11 +68,11 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) =>
+          tabBarIcon: ({ color, focused }) =>
             isIOS ? (
               <SymbolView name="house" tintColor={color} size={22} />
             ) : (
-              <Feather name="home" size={20} color={color} />
+              <Feather name="home" size={20} color={focused ? colors.primary : colors.mutedForeground} />
             ),
         }}
       />
@@ -80,11 +80,11 @@ function ClassicTabLayout() {
         name="history"
         options={{
           title: 'Journeys',
-          tabBarIcon: ({ color }) =>
+          tabBarIcon: ({ color, focused }) =>
             isIOS ? (
               <SymbolView name="clock" tintColor={color} size={22} />
             ) : (
-              <Feather name="clock" size={20} color={color} />
+              <Feather name="clock" size={20} color={focused ? colors.primary : colors.mutedForeground} />
             ),
         }}
       />
@@ -92,11 +92,11 @@ function ClassicTabLayout() {
         name="records"
         options={{
           title: 'Bests',
-          tabBarIcon: ({ color }) =>
+          tabBarIcon: ({ color, focused }) =>
             isIOS ? (
               <SymbolView name="flag" tintColor={color} size={22} />
             ) : (
-              <Feather name="flag" size={20} color={color} />
+              <Feather name="flag" size={20} color={focused ? colors.primary : colors.mutedForeground} />
             ),
         }}
       />

@@ -7,20 +7,24 @@
     "icon": "./assets/images/icon.png",
     "scheme": "sector",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "backgroundColor": "#080B09",
-      "image": "./assets/images/icon.png",
-      "resizeMode": "contain"
-    },
     "ios": {
       "supportsTablet": false
     },
     "android": {},
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/icon.png",
+      "output": "single"
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#080B09",
+          "image": "./assets/images/icon.png",
+          "resizeMode": "contain"
+        }
+      ],
       [
         "expo-location",
         {
