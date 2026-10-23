@@ -34,6 +34,11 @@ export default function PrivacyScreen() {
           body="Place names you choose to save are stored on this device. They are not verified places, route data, or journey records."
         />
         <InfoPanel
+          icon="cpu"
+          title="Route simulations"
+          body="The London demo uses fixed example locations, not your GPS. Simulations replay Mapbox route estimates on this device. They do not save journey records or change your bests."
+        />
+        <InfoPanel
           icon="shield"
           title="Future navigation"
           body="Route previews are not active navigation. Background tracking, voice guidance, and trip timing are not enabled."

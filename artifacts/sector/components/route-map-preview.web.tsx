@@ -10,9 +10,11 @@ const PADDING = 28;
 export default function RouteMapPreview({
   route,
   destinationName,
+  position,
 }: {
   route: RoutePreviewResponse;
   destinationName: string;
+  position?: { latitude: number; longitude: number } | null;
 }) {
   const colors = useColors();
   const longitudes = route.geometry.map((point) => point.longitude);
@@ -29,6 +31,12 @@ export default function RouteMapPreview({
     return `${x},${y}`;
   }).join(' ');
   const start = points.split(' ')[0].split(',').map(Number);
+  const marker = position
+    ? {
+        x: PADDING + ((position.longitude - minLongitude) / longitudeSpan) * (WIDTH - PADDING * 2),
+        y: HEIGHT - PADDING - ((position.latitude - minLatitude) / latitudeSpan) * (HEIGHT - PADDING * 2),
+      }
+    : null;
   const end = points.split(' ').at(-1)!.split(',').map(Number);
 
   return (
@@ -37,12 +45,18 @@ export default function RouteMapPreview({
         <Polyline points={points} fill="none" stroke={colors.primary} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
         <Circle cx={start[0]} cy={start[1]} r={8} fill="#7FC8FF" stroke="#080B09" strokeWidth={3} />
         <Circle cx={end[0]} cy={end[1]} r={8} fill="#C9F36A" stroke="#080B09" strokeWidth={3} />
+        {marker ? (
+          <>
+            <Circle cx={marker.x} cy={marker.y} r={14} fill={colors.primary} opacity={0.22} />
+            <Circle cx={marker.x} cy={marker.y} r={7} fill={colors.foreground} stroke={colors.background} strokeWidth={3} />
+          </>
+        ) : null}
       </Svg>
       <View style={styles.labels}>
         <Text style={[styles.label, { color: colors.mutedForeground }]}>START</Text>
         <Text numberOfLines={1} style={[styles.label, styles.destination, { color: colors.foreground }]}>{destinationName}</Text>
       </View>
-      <Text style={[styles.note, { color: colors.mutedForeground }]}>Actual Mapbox route shape · diagram only, not a map</Text>
+      <Text style={[styles.note, { color: colors.mutedForeground }]}>Actual Mapbox route shape · {position ? 'simulated position · ' : ''}diagram only, not a map</Text>
     </View>
   );
 }

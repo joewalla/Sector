@@ -5,9 +5,11 @@ import { useColors } from '@/hooks/useColors';
 export default function RouteMapPreview({
   route,
   destinationName,
+  position,
 }: {
   route: RoutePreviewResponse;
   destinationName: string;
+  position?: { latitude: number; longitude: number } | null;
 }) {
   const colors = useColors();
   const longitudes = route.geometry.map((point) => point.longitude);
@@ -37,6 +39,14 @@ export default function RouteMapPreview({
       />
       <Marker coordinate={route.geometry[0]} title="Your starting point" pinColor="#7FC8FF" />
       <Marker coordinate={route.geometry[route.geometry.length - 1]} title={destinationName} pinColor="#C9F36A" />
+      {position ? (
+        <Marker
+          coordinate={{ latitude: position.latitude, longitude: position.longitude }}
+          title="Simulated position"
+          pinColor={colors.foreground}
+          tracksViewChanges={false}
+        />
+      ) : null}
     </MapView>
   );
 }

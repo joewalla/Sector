@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -24,10 +24,15 @@ import {
 import { useColors } from '@/hooks/useColors';
 import { BackHeader, Eyebrow, InfoPanel, ScreenShell } from '@/components/sector-ui';
 import RouteMapPreview from './route-map-preview';
+import RouteSimulation from './route-simulation';
 import { saveRecentSearch } from '@/recent-searches';
 
 type Coordinate = { longitude: number; latitude: number };
 type Destination = PlaceSearchResponse['results'][number];
+
+const DEMO_ORIGIN: Coordinate = { longitude: -0.1276, latitude: 51.5007 };
+const DEMO_DESTINATION: Coordinate = { longitude: -0.0754, latitude: 51.5081 };
+const DEMO_NAME = 'Tower of London';
 
 async function getCurrentPosition(): Promise<Coordinate> {
   if (Platform.OS === 'web') {
@@ -63,6 +68,43 @@ export default function LiveDestinationSearch() {
   const [needsSettings, setNeedsSettings] = useState(false);
   const searchMutation = useSearchPlaces();
   const routeMutation = useGetRoutePreview();
+  const demoMutation = useGetRoutePreview();
+  const [demoRoute, setDemoRoute] = useState<RoutePreviewResponse | null>(null);
+  const [demoError, setDemoError] = useState('');
+  // Bumped on every route response so the simulation remounts (fresh timer and state) per response.
+  const [routeVersion, setRouteVersion] = useState(0);
+  const requestVersion = useRef(0);
+
+  function clearDemo() {
+    requestVersion.current += 1;
+    setDemoRoute(null);
+    setDemoError('');
+    demoMutation.reset();
+  }
+
+  async function loadDemo() {
+    const request = ++requestVersion.current;
+    Keyboard.dismiss();
+    setResults([]);
+    setDestination(null);
+    setRoute(null);
+    routeMutation.reset();
+    setError('');
+    setNeedsSettings(false);
+    setDemoError('');
+    setDemoRoute(null);
+    try {
+      const response = await demoMutation.mutateAsync({
+        data: { origin: DEMO_ORIGIN, destination: DEMO_DESTINATION },
+      });
+      if (request !== requestVersion.current) return;
+      setRouteVersion((v) => v + 1);
+      setDemoRoute(response);
+    } catch {
+      if (request !== requestVersion.current) return;
+      setDemoError('The London demo route could not be loaded from Mapbox. Check your connection and try again.');
+    }
+  }
 
   async function searchPlaces() {
     const cleaned = query.trim();
@@ -75,12 +117,16 @@ export default function LiveDestinationSearch() {
     setDestination(null);
     setRoute(null);
     setSaved(false);
+    clearDemo();
+    const request = requestVersion.current;
     try {
       const response = await searchMutation.mutateAsync({ data: { query: cleaned } });
+      if (request !== requestVersion.current) return;
       setResults(response.results);
       setSearchAttribution(response.attribution);
       if (response.results.length === 0) setError('No places matched that search. Try adding a town or postcode.');
     } catch {
+      if (request !== requestVersion.current) return;
       setResults([]);
       setError('Place search is unavailable right now. Check your connection and try again.');
     }
@@ -88,18 +134,24 @@ export default function LiveDestinationSearch() {
 
   async function previewRoute() {
     if (!destination) return;
+    clearDemo();
+    const request = requestVersion.current;
     setError('');
     setNeedsSettings(false);
     try {
       const origin = await getCurrentPosition();
+      if (request !== requestVersion.current) return;
       const response = await routeMutation.mutateAsync({
         data: {
           origin,
           destination: { longitude: destination.longitude, latitude: destination.latitude },
         },
       });
+      if (request !== requestVersion.current) return;
+      setRouteVersion((v) => v + 1);
       setRoute(response);
     } catch (caught) {
+      if (request !== requestVersion.current) return;
       const reason = caught instanceof Error ? caught.message : '';
       if (reason === 'LOCATION_DENIED' || reason === 'LOCATION_SETTINGS') {
         setNeedsSettings(reason === 'LOCATION_SETTINGS');
@@ -123,6 +175,11 @@ export default function LiveDestinationSearch() {
   }
 
   const placeType = (value: string) => value.replaceAll('_', ' ');
+  const shown: { route: RoutePreviewResponse; name: string; isDemo: boolean } | null = demoRoute
+    ? { route: demoRoute, name: DEMO_NAME, isDemo: true }
+    : route && destination
+      ? { route, name: destination.name, isDemo: false }
+      : null;
 
   return (
     <ScreenShell bottomSafeArea>
@@ -138,9 +195,44 @@ export default function LiveDestinationSearch() {
             <Eyebrow>PLAN A JOURNEY</Eyebrow>
             <Text style={[styles.title, { color: colors.foreground }]}>Where are you{'\n'}heading?</Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-              Search real places and addresses, then preview a traffic-aware driving route.
+              Search real places and addresses, preview a traffic-aware driving route, then rehearse it with a simulation.
             </Text>
           </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Try London demo: Westminster to Tower of London"
+            accessibilityState={{ disabled: demoMutation.isPending }}
+            testID="london-demo"
+            onPress={() => void loadDemo()}
+            disabled={demoMutation.isPending}
+            style={({ pressed }) => [
+              styles.demoCard,
+              { backgroundColor: colors.secondary, borderColor: demoRoute ? colors.primary : colors.border },
+              (pressed || demoMutation.isPending) && styles.pressed,
+            ]}
+          >
+            <Feather name="compass" size={18} color={colors.signalBlue} />
+            <View style={styles.resultCopy}>
+              <Text style={[styles.resultName, { color: colors.foreground }]}>Try London demo</Text>
+              <Text style={[styles.resultAddress, { color: colors.mutedForeground }]}>
+                Westminster to Tower of London · real Mapbox route, no location needed
+              </Text>
+            </View>
+            {demoMutation.isPending ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <Feather name={demoRoute ? 'check' : 'arrow-right'} size={17} color={colors.primary} />
+            )}
+          </Pressable>
+          {demoError ? (
+            <View style={styles.demoError}>
+              <Text accessibilityRole="alert" style={[styles.feedback, styles.flex, { color: colors.destructive }]}>{demoError}</Text>
+              <Pressable accessibilityRole="button" onPress={() => void loadDemo()} hitSlop={8}>
+                <Text style={[styles.settingsText, { color: colors.primary }]}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <View style={[styles.inputCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="map-pin" size={18} color={colors.primary} />
@@ -156,6 +248,7 @@ export default function LiveDestinationSearch() {
                 setRoute(null);
                 setError('');
                 setSaved(false);
+                clearDemo();
               }}
               placeholder="Enter a place or address"
               placeholderTextColor={colors.mutedForeground}
@@ -220,6 +313,7 @@ export default function LiveDestinationSearch() {
                     onPress={() => {
                       setDestination(place);
                       setRoute(null);
+                      clearDemo();
                       routeMutation.reset();
                       setError('');
                     }}
@@ -278,25 +372,26 @@ export default function LiveDestinationSearch() {
             </>
           ) : null}
 
-          {route && destination ? (
+          {shown ? (
             <View style={styles.routeSection}>
-              <Eyebrow>ROUTE PREVIEW · NOT ACTIVE NAVIGATION</Eyebrow>
+              <Eyebrow>{shown.isDemo ? 'LONDON DEMO ROUTE · WESTMINSTER TO TOWER OF LONDON' : 'ROUTE PREVIEW · NOT ACTIVE NAVIGATION'}</Eyebrow>
               <View style={[styles.routeSummary, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.metric}>
-                  <Text style={[styles.metricValue, { color: colors.foreground }]}>{Math.round(route.durationSeconds / 60)} min</Text>
+                  <Text style={[styles.metricValue, { color: colors.foreground }]}>{Math.round(shown.route.durationSeconds / 60)} min</Text>
                   <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>traffic-aware estimate</Text>
                 </View>
                 <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.metric}>
-                  <Text style={[styles.metricValue, { color: colors.foreground }]}>{(route.distanceMeters / 1609.344).toFixed(1)} mi</Text>
+                  <Text style={[styles.metricValue, { color: colors.foreground }]}>{(shown.route.distanceMeters / 1609.344).toFixed(1)} mi</Text>
                   <Text style={[styles.metricLabel, { color: colors.mutedForeground }]}>route distance</Text>
                 </View>
               </View>
-              <RouteMapPreview route={route} destinationName={destination.name} />
-              <Text style={[styles.attribution, { color: colors.mutedForeground }]}>{route.attribution} · Map data © Mapbox</Text>
+              <RouteSimulation key={`${shown.isDemo ? 'demo' : 'search'}-${routeVersion}`} route={shown.route} destinationName={shown.name} />
+              <RouteMapPreview route={shown.route} destinationName={shown.name} />
+              <Text style={[styles.attribution, { color: colors.mutedForeground }]}>{shown.route.attribution} · Map data © Mapbox</Text>
               <View style={styles.stepsSection}>
                 <Eyebrow>PREVIEW INSTRUCTIONS</Eyebrow>
-                {route.steps.slice(0, 6).map((step, index) => (
+                {shown.route.steps.slice(0, 6).map((step, index) => (
                   <View key={`${index}-${step.instruction}`} style={[styles.stepRow, { borderColor: colors.border }]}>
                     <View style={[styles.stepNumber, { backgroundColor: colors.secondary }]}>
                       <Text style={[styles.stepNumberText, { color: colors.primary }]}>{index + 1}</Text>
@@ -307,16 +402,16 @@ export default function LiveDestinationSearch() {
                     </View>
                   </View>
                 ))}
-                {route.steps.length > 6 ? (
+                {shown.route.steps.length > 6 ? (
                   <Text style={[styles.attribution, { color: colors.mutedForeground }]}>
-                    {route.steps.length - 6} more steps are available in the route.
+                    {shown.route.steps.length - 6} more steps are available in the route.
                   </Text>
                 ) : null}
               </View>
               <InfoPanel
                 icon="info"
-                title="Preview only"
-                body="This is a route estimate, not turn-by-turn navigation. No trip timer starts and no journey is recorded."
+                title="Estimate, not navigation"
+                body="Figures are Mapbox estimates. The simulation replays the route without GPS; no journey is recorded and no bests change."
               />
             </View>
           ) : null}
@@ -335,7 +430,7 @@ export default function LiveDestinationSearch() {
           <InfoPanel
             icon="shield"
             title="No journey has started"
-            body="Search and route preview are real Mapbox results. Live guidance, background tracking and trip timing are not enabled."
+            body="Search and route preview are real Mapbox results. Simulations replay estimates only. Live GPS guidance, background tracking and trip timing are not enabled."
           />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -379,4 +474,6 @@ const styles = StyleSheet.create({
   saveLink: { minHeight: 40, flexDirection: 'row', gap: 8, alignItems: 'center' },
   saveLinkText: { fontSize: 12, fontWeight: '600' },
   pressed: { opacity: 0.72 },
+  demoCard: { minHeight: 64, borderWidth: 1, borderRadius: 15, paddingHorizontal: 14, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  demoError: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 });
