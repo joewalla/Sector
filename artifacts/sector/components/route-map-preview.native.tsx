@@ -11,7 +11,7 @@ export default function RouteMapPreview({
   route: RoutePreviewResponse;
   destinationName: string;
   position?: { latitude: number; longitude: number } | null;
-  /** Simulation-only internal sector boundaries (S1, S2). Destination is the final sector end. */
+  /** Simulation-only internal sector ends. Destination is the final sector end. */
   sectorBoundaries?: { id: number; position: { latitude: number; longitude: number } }[];
 }) {
   const colors = useColors();

@@ -4,7 +4,7 @@ import type { RoutePreviewResponse } from '@workspace/api-client-react';
 // @ts-ignore Node's built-in TypeScript stripping needs source extensions.
 import { buildSimulationRoute, sampleSimulation } from './route-simulation.ts';
 // @ts-ignore Node's built-in TypeScript stripping needs source extensions.
-import { buildSimulationSectors, sampleSectorSplits } from './sector-timing.ts';
+import { buildSimulationSectors, sampleSectorSplits, PRACTICE_SECTOR_COUNTS } from './sector-timing.ts';
 
 const route: RoutePreviewResponse = {
   distanceMeters: 900,
@@ -93,4 +93,33 @@ test('invalid elapsed values clamp and invalid sector counts reject', () => {
   assert.deepEqual(sampleSectorSplits(sectors, NaN), sampleSectorSplits(sectors, 0));
   assert.ok(sampleSectorSplits(sectors, Infinity).every((s) => s.status === 'complete'));
   for (const count of [0, -1, 1.5, NaN, 21]) assert.throws(() => buildSimulationSectors(model, count));
+});
+
+test('every offered practice count previews equal boundaries on the unchanged route model', () => {
+  const frozenRoute = JSON.stringify(model);
+  assert.deepEqual(PRACTICE_SECTOR_COUNTS, [2, 3, 4, 5]);
+  for (const count of PRACTICE_SECTOR_COUNTS) {
+    const configured = buildSimulationSectors(model, count);
+    assert.equal(configured.length, count);
+    configured.forEach((sector, index) => {
+      assert.equal(sector.id, index + 1);
+      assert.ok(Math.abs((sector.endMeters - sector.startMeters) - model.distanceMeters / count) < 1e-8);
+      assert.ok(Math.abs(sampleSimulation(model, sector.endSeconds).traveledMeters - sector.endMeters) < 1e-8);
+    });
+    const completed = sampleSectorSplits(configured, model.durationSeconds);
+    assert.ok(completed.every((s) => s.status === 'complete'));
+    assert.ok(Math.abs(completed.reduce((sum, s) => sum + s.splitSeconds, 0) - model.durationSeconds) < 1e-8);
+  }
+  assert.equal(JSON.stringify(model), frozenRoute);
+});
+
+test('reconfiguring and returning to an earlier count does not change the route or its estimates', () => {
+  const first = buildSimulationSectors(model, 3);
+  buildSimulationSectors(model, 5);
+  const again = buildSimulationSectors(model, 3);
+  assert.deepEqual(again, first);
+  assert.deepEqual(
+    sampleSectorSplits(again, model.durationSeconds),
+    sampleSectorSplits(first, model.durationSeconds),
+  );
 });

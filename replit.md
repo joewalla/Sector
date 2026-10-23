@@ -42,7 +42,7 @@ Sector is a native navigation and journey-performance app that records real trip
 
 - Stage 1 provides branded home, destination-entry, inactive navigation, results, history, personal-best, and location-privacy screens.
 - Destination search and route previews use Mapbox through the API; previewing from the user's position requests foreground location once. The fixed London demo requires no location.
-- Route simulation includes three equal-distance practice sectors and exact estimated split times. Replay comparisons are in-memory only for the same route response, never real journey records or personal bests.
+- Route simulation offers two to five equal-distance practice sectors and exact estimated split times. Sector configuration is locked during playback (including pauses); changes clear comparisons. Replay comparisons are in-memory only for the same route response and sector configuration, never real journey records or personal bests.
 
 ## User preferences
 

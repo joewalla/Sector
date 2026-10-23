@@ -2,3 +2,4 @@
 - [Physical iPhone validation](iphone-validation.md) — the user confirmed Expo Go opens Sector and its screens work; do not infer live-navigation validation.
 - [Google native dependency checks](google-native-dependencies.md) — inspect the published podspec for native SDK pins and Swift Package Manager requirements, not just README compatibility claims.
 - [Mapbox prototype scope](prototype-navigation-scope.md) — user chose browser-testable Mapbox simulation before paid Apple or Google setup.
+- [Cold Expo browser capture](expo-preview-capture.md) — a first screenshot after restart can precede screen rendering; corroborate a blank capture before treating it as a regression.

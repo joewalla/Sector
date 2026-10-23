@@ -8,8 +8,9 @@ import { useColors } from '@/hooks/useColors';
 import { Eyebrow, InfoPanel } from '@/components/sector-ui';
 import RouteMapPreview from './route-map-preview';
 import { buildSimulationRoute, sampleSimulation } from '@/simulation/route-simulation';
-import { buildSimulationSectors, sampleSectorSplits } from '@/simulation/sector-timing';
+import { buildSimulationSectors, sampleSectorSplits, type PracticeSectorCount } from '@/simulation/sector-timing';
 import SimulationSectorSplits from './simulation-sector-splits';
+import PracticeSectorConfig from './practice-sector-config';
 
 type Status = 'idle' | 'running' | 'paused' | 'finished' | 'ended';
 const SPEEDS = [1, 20, 60, 120] as const;
@@ -44,7 +45,8 @@ export default function RouteSimulation({
     }
   }, [route]);
   const model = built.model;
-  const sectors = useMemo(() => model ? buildSimulationSectors(model, 3) : null, [model]);
+  const [sectorCount, setSectorCount] = useState<PracticeSectorCount>(3);
+  const sectors = useMemo(() => model ? buildSimulationSectors(model, sectorCount) : null, [model, sectorCount]);
   // Memory-only practice comparison. Cleared on unmount (parent keys this component by route).
   const [lastCompleted, setLastCompleted] = useState<number[] | null>(null);
   const [baseline, setBaseline] = useState<number[] | null>(null);
@@ -156,12 +158,26 @@ export default function RouteSimulation({
     setAutoPaused(false);
     go('ended');
   };
+  const changeSectorCount = (next: PracticeSectorCount) => {
+    if (statusRef.current === 'running' || statusRef.current === 'paused' || next === sectorCount) return;
+    tap();
+    setSectorCount(next);
+    setLastCompleted(null);
+    setBaseline(null);
+    elapsedRef.current = 0;
+    setElapsed(0);
+    setAutoPaused(false);
+    go('idle');
+  };
 
   const pct = Math.min(100, Math.max(0, sample.progress * 100));
 
   return (
     <View style={styles.section} testID="route-simulation">
       <Eyebrow>ROUTE SIMULATION · NOT REAL DRIVING</Eyebrow>
+      {sectors ? (
+        <PracticeSectorConfig count={sectorCount} sectors={sectors} locked={active} onChange={changeSectorCount} />
+      ) : null}
 
       {status === 'idle' ? (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

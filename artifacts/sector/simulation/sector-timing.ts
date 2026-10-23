@@ -1,6 +1,9 @@
 import { simulationPositionAtDistance } from './route-simulation.ts';
 import type { SimulationRoute } from './route-simulation';
 
+export const PRACTICE_SECTOR_COUNTS = [2, 3, 4, 5] as const;
+export type PracticeSectorCount = (typeof PRACTICE_SECTOR_COUNTS)[number];
+
 export type SimulationSector = {
   id: number;
   startMeters: number;
