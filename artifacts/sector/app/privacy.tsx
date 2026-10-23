@@ -19,14 +19,14 @@ export default function PrivacyScreen() {
             Nothing is tracking you now.
           </Text>
           <Text style={[styles.body, { color: colors.mutedForeground }]}>
-            This foundation build does not ask for location permission or run location tracking.
+            Sector asks for location only when you request a route preview. It does not track you in the background.
           </Text>
         </View>
 
         <InfoPanel
           icon="map-pin"
           title="Location permission"
-          body="No location permission is requested in this build. Before navigation is enabled, Sector will explain what location access is needed and when it is active."
+          body="When you tap Preview route, Sector requests foreground location once. Your coordinates are sent to the Sector server and Mapbox to calculate that route; they are not saved."
         />
         <InfoPanel
           icon="hard-drive"
@@ -36,7 +36,7 @@ export default function PrivacyScreen() {
         <InfoPanel
           icon="shield"
           title="Future navigation"
-          body="The navigation stage will require its own permission and SDK review. Background tracking will not be enabled without clear disclosure and appropriate iOS configuration."
+          body="Route previews are not active navigation. Background tracking, voice guidance, and trip timing are not enabled."
         />
         <View style={[styles.footer, { borderColor: colors.border }]}>
           <Feather name="lock" size={14} color={colors.primary} />
