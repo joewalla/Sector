@@ -120,13 +120,16 @@ export default function RouteSimulation({
       if (state !== 'active') autoPause();
     });
     const doc = Platform.OS === 'web' ? (globalThis as { document?: Document }).document : undefined;
+    const browserWindow = Platform.OS === 'web' ? globalThis.window : undefined;
     const onVisibility = () => {
       if (doc?.visibilityState === 'hidden') autoPause();
     };
     doc?.addEventListener('visibilitychange', onVisibility);
+    browserWindow?.addEventListener('blur', autoPause);
     return () => {
       sub.remove();
       doc?.removeEventListener('visibilitychange', onVisibility);
+      browserWindow?.removeEventListener('blur', autoPause);
     };
   }, [autoPause]);
 
@@ -248,7 +251,7 @@ export default function RouteSimulation({
                 CURRENT ·{' '}
                 STEP {Math.min(sample.stepIndex + 1, model.stepCount)} OF {model.stepCount}
               </Text>
-              <Text style={[styles.tag, { color: status === 'paused' ? colors.signalBlue : colors.primary }]}>
+              <Text testID="simulation-playback-state" style={[styles.tag, { color: status === 'paused' ? colors.signalBlue : colors.primary }]}>
                 {status === 'paused' ? (autoPaused ? 'PAUSED · SCREEN LEFT' : 'PAUSED') : `SIMULATING ${speed}x`}
               </Text>
             </View>
@@ -297,7 +300,7 @@ export default function RouteSimulation({
 
       {done ? (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.tag, { color: status === 'finished' ? colors.primary : colors.signalBlue }]}>
+          <Text testID="simulation-result-state" style={[styles.tag, { color: status === 'finished' ? colors.primary : colors.signalBlue }]}>
             {status === 'finished' ? 'SIMULATION COMPLETE' : 'SIMULATION ENDED EARLY'}
           </Text>
           <Text style={[styles.heading, { color: colors.foreground }]}>

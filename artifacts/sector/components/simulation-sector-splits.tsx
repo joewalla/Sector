@@ -68,7 +68,7 @@ export default function SimulationSectorSplits({
           >
             <View style={styles.rowBetween}>
               <Text style={[styles.sector, { color: colors.foreground }]}>S{s.id}</Text>
-              <Text style={[styles.tag, { color: mode === 'idle' ? colors.mutedForeground : tone }]}>{stateLabel}</Text>
+              <Text testID={`sector-state-${s.id}`} style={[styles.tag, { color: mode === 'idle' ? colors.mutedForeground : tone }]}>{stateLabel}</Text>
             </View>
             <Text style={[styles.meta, { color: colors.mutedForeground }]}>
               {miles(s.startMeters)} to {miles(s.endMeters)} · Mapbox {splitClock(s.mapboxDurationSeconds ?? s.durationSeconds)}
@@ -80,17 +80,17 @@ export default function SimulationSectorSplits({
                   <View style={[styles.fill, { backgroundColor: tone, transform: [{ scaleX: pct }] }]} />
                 </View>
                 <View style={styles.rowBetween}>
-                  <Text style={[styles.value, { color: s.status === 'pending' ? colors.mutedForeground : colors.foreground }]}>
+                  <Text testID={`sector-split-time-${s.id}`} style={[styles.value, { color: s.status === 'pending' ? colors.mutedForeground : colors.foreground }]}>
                     {s.status === 'pending' ? '--:--' : splitClock(s.splitSeconds)}
                     <Text style={[styles.meta, { color: colors.mutedForeground }]}> split</Text>
                   </Text>
-                  <Text style={[styles.value, { color: colors.mutedForeground }]}>
+                  <Text testID={`sector-cumulative-time-${s.id}`} style={[styles.value, { color: colors.mutedForeground }]}>
                     {s.cumulativeSeconds == null ? '--:--' : splitClock(s.cumulativeSeconds)}
                     <Text style={styles.meta}> total</Text>
                   </Text>
                 </View>
                 {base != null ? (
-                  <Text style={[styles.meta, { color: colors.mutedForeground }]}>
+                  <Text testID={`sector-comparison-${s.id}`} style={[styles.meta, { color: colors.mutedForeground }]}>
                     Previous replay {splitClock(base)}
                     {s.status === 'complete' ? ` · ${delta(s.splitSeconds - base)}` : ''}
                   </Text>

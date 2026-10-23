@@ -54,6 +54,8 @@ Sector is a native navigation and journey-performance app that records real trip
 
 ## Gotchas
 
+- Browser regression checks run with `pnpm test:sector:browser` against the running Expo web preview. They use explicit synthetic route fixtures and controlled lifecycle events, not live Mapbox or iPhone data. See `tests/sector-simulation/README.md`; generated reports stay in ignored `generated-artifacts/`.
+
 - The app targets Expo SDK 58. The `@rnmapbox/navigation` bridge is still alpha; the SDK upgrade alone does not establish native navigation compatibility. Re-check the bridge before adding it.
 - A real navigation build will require a development build and physical iPhone validation; Expo Go alone is not sufficient for custom native navigation modules.
 
