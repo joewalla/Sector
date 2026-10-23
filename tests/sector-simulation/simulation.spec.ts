@@ -76,6 +76,68 @@ test('complete accelerated replay and second playback speed produce matching spl
   await testInfo.attach('completed-replay-comparison', { body: await page.screenshot(), contentType: 'image/png' });
 });
 
+test('scrubbing updates instructions and exact boundaries without creating a comparison baseline', async ({ page }) => {
+  const demo = await openDemo(page);
+  const slider = page.getByRole('slider', { name: 'Inspect elapsed route time' });
+  await slider.fill('75');
+  await expect(page.getByTestId('simulation-selected-time')).toContainText('1:15 / 3:00');
+  await expect(page.getByTestId('simulation-playback-state')).toHaveText('INSPECTION · PAUSED');
+  await expect(page.getByTestId('route-simulation').getByText('Fixture: continue along test road', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('sector-state-1')).toHaveText('COMPLETE');
+  await expect(page.getByTestId('sector-split-time-2')).toHaveText('0:15 split');
+  await expect(page.getByTestId('sector-state-3')).toHaveText('NOT REACHED');
+  await expect(page.getByTestId('practice-sector-count-4')).toBeDisabled();
+  await page.clock.runFor(30_000);
+  await expect(page.getByTestId('simulation-selected-time')).toContainText('1:15 / 3:00');
+  await page.getByTestId('simulation-seek-S1').click();
+  await expect(page.getByTestId('sector-split-time-2')).toHaveText('0:00 split');
+  await slider.press('Home');
+  await expect(page.getByTestId('simulation-selected-time')).toContainText('0:00 / 3:00');
+  await expect(page.getByTestId('route-simulation').getByText('Fixture: depart Westminster', { exact: true })).toBeVisible();
+  await slider.press('End');
+  await expect(page.getByTestId('route-simulation').getByText('Fixture: arrived', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('simulation-inspection-state')).toBeVisible();
+  await expect(page.getByTestId('simulation-result-state')).toHaveCount(0);
+  // Even resuming at the finish must not promote this run to a replay baseline.
+  await page.getByTestId('simulation-toggle').click();
+  await page.clock.runFor(1_000);
+  await expect(page.getByTestId('simulation-result-state')).toHaveText('INSPECTION ONLY · NO BASELINE SAVED');
+  await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+  await finish(page, 120, 2_000, true);
+  await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+  await finish(page, 60, 3_000, true);
+  await expectCompleteSplits(page, '1:00', true);
+  expect(demo.requests()).toBe(1);
+  demo.assertHealthy();
+});
+
+test('scrubbed active runs keep the previous replay and synthetic-stop timing intact', async ({ page }) => {
+  const demo = await openDemo(page);
+  await page.getByTestId('simulated-stop-duration-30').click();
+  await page.getByTestId('simulated-stop-sector-2').click();
+  await finish(page, 120, 2_000);
+  await page.getByTestId('simulation-again').click();
+  await page.getByTestId('simulation-speed-1').click();
+  const slider = page.getByRole('slider', { name: 'Inspect elapsed route time' });
+  await slider.fill('100');
+  await expect(page.getByText('Synthetic stop · 20s left', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('sector-split-time-2')).toHaveText('0:40 split');
+  await expect(page.getByTestId('simulated-stop-duration-60')).toBeDisabled();
+  await slider.fill('50');
+  await expect(page.getByTestId('sector-state-1')).toHaveText('CURRENT');
+  await expect(page.getByTestId('sector-state-2')).toHaveText('NOT REACHED');
+  await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+  await page.getByTestId('simulation-seek-finish').click();
+  await page.getByTestId('simulation-end').click();
+  await expect(page.getByTestId('simulation-result-state')).toContainText('INSPECTION ONLY');
+  await finish(page, 120, 2_000, true);
+  await expect(page.getByTestId('sector-comparison-1')).toContainText('match');
+  await expect(page.getByTestId('sector-comparison-2')).toContainText('Previous replay 1:30');
+  await expect(page.getByTestId('sector-comparison-2')).toContainText('match');
+  expect(demo.requests()).toBe(1);
+  demo.assertHealthy();
+});
+
 test('pause, resume, restart and partial endings retain only the last completed baseline', async ({ page }) => {
   const demo = await openDemo(page);
   await finish(page, 120, 2_000);

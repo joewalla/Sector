@@ -13,6 +13,7 @@ import { configureSimulatedStop, sampleSimulatedStop, type SimulatedStopConfig }
 import SimulationSectorSplits from './simulation-sector-splits';
 import PracticeSectorConfig from './practice-sector-config';
 import SimulationStopConfig from './simulation-stop-config';
+import SimulationTimeSlider from './simulation-time-slider';
 
 type Status = 'idle' | 'running' | 'paused' | 'finished' | 'ended';
 const SPEEDS = [1, 20, 60, 120] as const;
@@ -62,6 +63,9 @@ export default function RouteSimulation({
   const [speed, setSpeed] = useState<Speed>(20);
   const [elapsed, setElapsed] = useState(0);
   const [autoPaused, setAutoPaused] = useState(false);
+  const [inspectionOnly, setInspectionOnly] = useState(false);
+  // Synchronous guard prevents an already queued clock tick from promoting a scrubbed run.
+  const inspectionRef = useRef(false);
   const elapsedRef = useRef(0);
   const speedRef = useRef<Speed>(20);
   const statusRef = useRef<Status>('idle');
@@ -93,12 +97,12 @@ export default function RouteSimulation({
       setElapsed(next);
       if (sampleSimulation(model, next).finished) {
         go('finished');
-        if (sectors) {
+        if (sectors && !inspectionRef.current) {
           // Analytical boundary times from elapsed, independent of tick timing and playback rate.
           const final = sampleSectorSplits(sectors, model.durationSeconds);
           if (final.every((x) => x.status === 'complete')) setLastCompleted(final.map((x) => x.splitSeconds));
         }
-        if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+        if (!inspectionRef.current && Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       }
     }, TICK_MS);
     return () => clearInterval(id);
@@ -165,6 +169,8 @@ export default function RouteSimulation({
     tap();
     // Only a fully completed replay becomes the baseline; partial runs never overwrite it.
     if (lastCompleted) setBaseline(lastCompleted);
+    inspectionRef.current = false;
+    setInspectionOnly(false);
     elapsedRef.current = 0;
     setElapsed(0);
     setAutoPaused(false);
@@ -181,12 +187,25 @@ export default function RouteSimulation({
     go('ended');
   };
   const resetConfiguration = () => {
+    inspectionRef.current = false;
+    setInspectionOnly(false);
     setLastCompleted(null);
     setBaseline(null);
     elapsedRef.current = 0;
     setElapsed(0);
     setAutoPaused(false);
     go('idle');
+  };
+  const seek = (seconds: number) => {
+    if (!Number.isFinite(seconds)) return;
+    // Inspection always pauses, including at the endpoint. Only Restart starts a clean replay.
+    inspectionRef.current = true;
+    setInspectionOnly(true);
+    go('paused');
+    setAutoPaused(false);
+    const next = Math.max(0, Math.min(model.durationSeconds, seconds));
+    elapsedRef.current = next;
+    setElapsed(next);
   };
   const changeSectorCount = (next: PracticeSectorCount) => {
     if (statusRef.current === 'running' || statusRef.current === 'paused' || next === sectorCount) return;
@@ -212,6 +231,39 @@ export default function RouteSimulation({
         <PracticeSectorConfig count={sectorCount} sectors={sectors} locked={active} onChange={changeSectorCount} />
       ) : null}
       <SimulationStopConfig value={stopConfig} sectorCount={sectorCount} locked={active} onChange={changeStopConfig} />
+
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.heading, { color: colors.foreground }]}>Inspect route time</Text>
+        <Text style={[styles.body, { color: colors.mutedForeground }]}>
+          Drag to any point or select a sector boundary. Scrubbing pauses playback and excludes this run from replay comparisons. Restart for a comparable replay.
+        </Text>
+        <Text testID="simulation-selected-time" style={[styles.body, { color: colors.foreground }]}>
+          {clock(elapsed)} / {clock(model.durationSeconds)} · {stop ? 'includes synthetic delay' : 'Mapbox route time'}
+        </Text>
+        <SimulationTimeSlider value={elapsed} duration={model.durationSeconds} valueText={`${clock(elapsed)} of ${clock(model.durationSeconds)}`} onSeek={seek} />
+        <View style={styles.seekPoints}>
+          {[{ label: 'Start', seconds: 0 }, ...(sectors ?? []).map((sector) => ({
+            label: sector.id === sectorCount ? 'Finish' : `S${sector.id} end`,
+            seconds: sector.endSeconds,
+          }))].map(({ label, seconds }) => (
+            <Pressable
+              key={label}
+              accessibilityRole="button"
+              accessibilityLabel={`Inspect ${label}, ${clock(seconds)}`}
+              testID={`simulation-seek-${label === 'Start' ? 'start' : label === 'Finish' ? 'finish' : label.split(' ')[0]}`}
+              onPress={() => { tap(); seek(seconds); }}
+              style={({ pressed }) => [styles.seekPoint, { backgroundColor: colors.secondary }, pressed && styles.pressed]}
+            >
+              <Text style={[styles.body, { color: colors.secondaryForeground }]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {inspectionOnly ? (
+          <Text testID="simulation-inspection-state" accessibilityLiveRegion="polite" style={[styles.body, { color: colors.signalBlue }]}>
+            Inspection only · splits show the selected time, not a completed replay. No comparison baseline will be saved.
+          </Text>
+        ) : null}
+      </View>
 
       {status === 'idle' ? (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -252,7 +304,8 @@ export default function RouteSimulation({
                 STEP {Math.min(sample.stepIndex + 1, model.stepCount)} OF {model.stepCount}
               </Text>
               <Text testID="simulation-playback-state" style={[styles.tag, { color: status === 'paused' ? colors.signalBlue : colors.primary }]}>
-                {status === 'paused' ? (autoPaused ? 'PAUSED · SCREEN LEFT' : 'PAUSED') : `SIMULATING ${speed}x`}
+                {inspectionOnly ? (status === 'paused' ? 'INSPECTION · PAUSED' : `INSPECTION · ${speed}x`)
+                  : status === 'paused' ? (autoPaused ? 'PAUSED · SCREEN LEFT' : 'PAUSED') : `SIMULATING ${speed}x`}
               </Text>
             </View>
             <Text accessibilityLiveRegion="polite" style={[styles.instruction, { color: colors.foreground }]}>
@@ -294,17 +347,17 @@ export default function RouteSimulation({
             <Control icon="rotate-ccw" label="Restart" onPress={start} testID="simulation-restart" />
             <Control icon="square" label="End early" onPress={endEarly} danger testID="simulation-end" />
           </View>
-          {splits ? <SimulationSectorSplits splits={splits} baseline={baseline} mode="active" /> : null}
+          {splits ? <SimulationSectorSplits splits={splits} baseline={inspectionOnly ? null : baseline} mode={inspectionOnly ? 'inspection' : 'active'} /> : null}
         </>
       ) : null}
 
       {done ? (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text testID="simulation-result-state" style={[styles.tag, { color: status === 'finished' ? colors.primary : colors.signalBlue }]}>
-            {status === 'finished' ? 'SIMULATION COMPLETE' : 'SIMULATION ENDED EARLY'}
+            {inspectionOnly ? 'INSPECTION ONLY · NO BASELINE SAVED' : status === 'finished' ? 'SIMULATION COMPLETE' : 'SIMULATION ENDED EARLY'}
           </Text>
           <Text style={[styles.heading, { color: colors.foreground }]}>
-            {status === 'finished' ? `Reached ${destinationName}` : `Stopped before ${destinationName}`}
+            {inspectionOnly ? `Inspected route to ${destinationName}` : status === 'finished' ? `Reached ${destinationName}` : `Stopped before ${destinationName}`}
           </Text>
           <View style={styles.metrics}>
             <Metric value={miles(sample.traveledMeters)} label="simulated distance" />
@@ -315,13 +368,15 @@ export default function RouteSimulation({
             <InfoPanel
               icon="clock"
               title="Mapbox estimate + synthetic delay"
-              body={status === 'finished'
+              body={inspectionOnly
+                ? `Selected route time: ${clock(elapsed - stopSample.elapsedSeconds)} of Mapbox time + ${clock(stopSample.elapsedSeconds)} of synthetic delay. These are inspected values, not a replay record.`
+                : status === 'finished'
                 ? `Original Mapbox estimate ${clock(reference!.durationSeconds)} + synthetic stop ${clock(stop.durationSeconds)} = simulated total ${clock(elapsed)}. The added delay belongs to S${stop.sectorId}.`
                 : `Replayed Mapbox time ${clock(elapsed - stopSample.elapsedSeconds)} + ${clock(stopSample.elapsedSeconds)} of the configured ${clock(stop.durationSeconds)} synthetic stop. Unreached time is not counted.`}
             />
           ) : null}
-          {splits ? <SimulationSectorSplits splits={splits} baseline={baseline} mode="done" /> : null}
-          {status === 'ended' ? (
+          {splits ? <SimulationSectorSplits splits={splits} baseline={inspectionOnly ? null : baseline} mode={inspectionOnly ? 'inspection' : 'done'} /> : null}
+          {status === 'ended' && !inspectionOnly ? (
             <Text style={[styles.body, { color: colors.mutedForeground }]}>
               {miles(sample.remainingMeters)} and about {clock(sample.remainingSeconds)} of the {stop ? 'configured simulation' : 'Mapbox estimate'} were not simulated.
             </Text>
@@ -446,6 +501,8 @@ const styles = StyleSheet.create({
   speed: { flex: 1, minHeight: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   speedText: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
   controls: { flexDirection: 'row', gap: 8 },
+  seekPoints: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  seekPoint: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 10 },
   control: { flex: 1, minHeight: 48, borderWidth: 1, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   controlText: { fontSize: 12, fontWeight: '700' },
 });

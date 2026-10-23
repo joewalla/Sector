@@ -38,7 +38,7 @@ export default function SimulationSectorSplits({
   splits: SectorSplitView[];
   /** Completed split seconds from the previous fully completed replay, in sector order. */
   baseline?: number[] | null;
-  mode: 'idle' | 'active' | 'done';
+  mode: 'idle' | 'active' | 'done' | 'inspection';
 }) {
   const colors = useColors();
   const hasBaseline = !!baseline && baseline.length === splits.length;
@@ -49,7 +49,9 @@ export default function SimulationSectorSplits({
         <Text style={[styles.tag, { color: colors.mutedForeground }]}>{splits.length} EQUAL-DISTANCE</Text>
       </View>
       <Text style={[styles.body, { color: colors.mutedForeground }]}>
-        {mode === 'idle'
+        {mode === 'inspection'
+          ? 'Inspection only: sector states and times are calculated at the selected route time. Completed sectors here are not a completed replay or comparison baseline.'
+          : mode === 'idle'
           ? 'Sector times use Mapbox estimates plus any labelled synthetic stop. Replaying this same configuration gives the same splits at any playback speed.'
           : 'Practice only. Times use Mapbox estimates plus any labelled synthetic stop, separate from real journeys and personal bests.'}
       </Text>

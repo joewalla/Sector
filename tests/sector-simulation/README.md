@@ -27,6 +27,8 @@ Coverage:
 - Clearing comparisons on a new route response or sector configuration.
 - Synthetic stop countdown, locked settings, and honest partial-delay summary.
 - No extra route request on replay or configuration change.
+- Arbitrary forward/backward inspection, exact sector-boundary jumps, keyboard scrubbing and pause-on-seek.
+- Inspection-only runs never create a baseline; previous full replays and synthetic-stop timing stay intact.
 
 Reports, traces and screenshots are written beneath the ignored
 `generated-artifacts/sector-browser/` directory. Test fixtures are never

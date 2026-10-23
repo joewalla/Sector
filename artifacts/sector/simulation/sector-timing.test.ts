@@ -43,6 +43,26 @@ test('pending, active and complete states are correct exactly at boundaries', ()
   assert.equal(active[2].splitSeconds, 0);
 });
 
+test('arbitrary forward and backward inspection keeps marker, instructions and boundaries in sync', () => {
+  const snapshot = JSON.stringify(model);
+  for (const seconds of [120, 55.25, 0, 75, 29.5, 30, 119.75, 0]) {
+    const sample = sampleSimulation(model, seconds);
+    const splits = sampleSectorSplits(sectors, seconds);
+    assert.equal(sample.remainingSeconds, 120 - seconds);
+    assert.equal(sample.instruction, seconds === 120 ? model.arrivalInstruction : seconds < 30 ? 'Head north' : 'Continue');
+    const completedMeters = splits.filter((s) => s.status === 'complete').at(-1)?.endMeters ?? 0;
+    assert.ok(sample.traveledMeters >= completedMeters);
+    const current = splits.find((s) => s.status === 'active');
+    if (current) {
+      assert.ok(sample.traveledMeters >= current.startMeters);
+      assert.ok(sample.traveledMeters <= current.endMeters);
+      assert.equal(current.splitSeconds, seconds - current.startSeconds);
+    }
+    assert.deepEqual(sample.position, sampleSimulation(model, seconds).position);
+  }
+  assert.equal(JSON.stringify(model), snapshot, 'inspection never mutates the route input');
+});
+
 test('one delayed tick crossing every boundary still yields exact splits', () => {
   const completed = sampleSectorSplits(sectors, 10_000);
   assert.ok(completed.every((s) => s.status === 'complete'));
