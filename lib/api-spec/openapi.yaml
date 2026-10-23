@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: navigation
+    description: Mapbox-backed place search and route previews
 paths:
   /healthz:
     get:
@@ -24,6 +26,86 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /places/search:
+    post:
+      operationId: searchPlaces
+      tags: [navigation]
+      summary: Search for destinations
+      description: Searches Mapbox Search Box for real places and addresses. Results are temporary and are not persisted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceSearchInput"
+      responses:
+        "200":
+          description: Matching places
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaceSearchResponse"
+        "400":
+          description: Invalid query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Mapbox search is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Mapbox is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /route/preview:
+    post:
+      operationId: getRoutePreview
+      tags: [navigation]
+      summary: Preview a driving route
+      description: Returns a real Mapbox driving route, line geometry, and turn steps without starting navigation or saving a journey.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoutePreviewInput"
+      responses:
+        "200":
+          description: Route preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoutePreviewResponse"
+        "400":
+          description: Invalid coordinates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No route found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Mapbox routing is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Mapbox is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +115,121 @@ components:
           type: string
       required:
         - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    PlaceSearchInput:
+      type: object
+      properties:
+        query:
+          type: string
+          minLength: 3
+          maxLength: 256
+      required:
+        - query
+    Coordinate:
+      type: object
+      properties:
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+      required:
+        - longitude
+        - latitude
+    PlaceSearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        fullAddress:
+          type: string
+        featureType:
+          type: string
+        longitude:
+          type: number
+        latitude:
+          type: number
+      required:
+        - id
+        - name
+        - fullAddress
+        - featureType
+        - longitude
+        - latitude
+    PlaceSearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaceSearchResult"
+        attribution:
+          type: string
+      required:
+        - results
+        - attribution
+    RoutePreviewInput:
+      type: object
+      properties:
+        origin:
+          $ref: "#/components/schemas/Coordinate"
+        destination:
+          $ref: "#/components/schemas/Coordinate"
+      required:
+        - origin
+        - destination
+    RouteStep:
+      type: object
+      properties:
+        instruction:
+          type: string
+        roadName:
+          type: string
+        distanceMeters:
+          type: number
+        durationSeconds:
+          type: number
+        maneuverType:
+          type: string
+      required:
+        - instruction
+        - roadName
+        - distanceMeters
+        - durationSeconds
+        - maneuverType
+    RoutePreviewResponse:
+      type: object
+      properties:
+        distanceMeters:
+          type: number
+        durationSeconds:
+          type: number
+        geometry:
+          type: array
+          minItems: 2
+          items:
+            $ref: "#/components/schemas/Coordinate"
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteStep"
+        attribution:
+          type: string
+      required:
+        - distanceMeters
+        - durationSeconds
+        - geometry
+        - steps
+        - attribution
 
