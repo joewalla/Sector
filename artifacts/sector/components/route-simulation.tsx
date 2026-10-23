@@ -7,10 +7,12 @@ import type { RoutePreviewResponse } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { Eyebrow, InfoPanel } from '@/components/sector-ui';
 import RouteMapPreview from './route-map-preview';
-import { buildSimulationRoute, sampleSimulation } from '@/simulation/route-simulation';
+import { advancePlaybackClock, buildSimulationRoute, sampleSimulation } from '@/simulation/route-simulation';
 import { buildSimulationSectors, sampleSectorSplits, type PracticeSectorCount } from '@/simulation/sector-timing';
+import { configureSimulatedStop, sampleSimulatedStop, type SimulatedStopConfig } from '@/simulation/simulated-stop';
 import SimulationSectorSplits from './simulation-sector-splits';
 import PracticeSectorConfig from './practice-sector-config';
+import SimulationStopConfig from './simulation-stop-config';
 
 type Status = 'idle' | 'running' | 'paused' | 'finished' | 'ended';
 const SPEEDS = [1, 20, 60, 120] as const;
@@ -44,8 +46,14 @@ export default function RouteSimulation({
       return { model: null, failed: true };
     }
   }, [route]);
-  const model = built.model;
+  const reference = built.model;
   const [sectorCount, setSectorCount] = useState<PracticeSectorCount>(3);
+  const [stopConfig, setStopConfig] = useState<SimulatedStopConfig>({ sectorId: 1, durationSeconds: 0 });
+  const configured = useMemo(() => reference ? configureSimulatedStop(reference, sectorCount, stopConfig) : null,
+    [reference, sectorCount, stopConfig]);
+  const model = configured?.model ?? null;
+  const stop = configured?.stop ?? null;
+  const referenceSectors = useMemo(() => reference ? buildSimulationSectors(reference, sectorCount) : null, [reference, sectorCount]);
   const sectors = useMemo(() => model ? buildSimulationSectors(model, sectorCount) : null, [model, sectorCount]);
   // Memory-only practice comparison. Cleared on unmount (parent keys this component by route).
   const [lastCompleted, setLastCompleted] = useState<number[] | null>(null);
@@ -72,9 +80,15 @@ export default function RouteSimulation({
       // Synchronous guard: autoPause flips the ref before React re-renders and clears this interval.
       if (statusRef.current !== 'running') return;
       const now = performance.now();
-      const delta = ((now - last) / 1000) * speedRef.current;
+      const delta = (now - last) / 1000;
       last = now;
-      const next = Math.min(model.durationSeconds, elapsedRef.current + delta);
+      const next = advancePlaybackClock({
+        elapsedSeconds: elapsedRef.current,
+        deltaSeconds: delta,
+        rate: speedRef.current,
+        durationSeconds: model.durationSeconds,
+        running: statusRef.current === 'running',
+      });
       elapsedRef.current = next;
       setElapsed(next);
       if (sampleSimulation(model, next).finished) {
@@ -117,7 +131,12 @@ export default function RouteSimulation({
   }, [autoPause]);
 
   const sample = useMemo(() => (model ? sampleSimulation(model, elapsed) : null), [model, elapsed]);
-  const splits = useMemo(() => (sectors ? sampleSectorSplits(sectors, elapsed) : null), [sectors, elapsed]);
+  const splits = useMemo(() => sectors ? sampleSectorSplits(sectors, elapsed).map((split, index) => ({
+    ...split,
+    mapboxDurationSeconds: referenceSectors![index].durationSeconds,
+    syntheticStopSeconds: stop?.sectorId === split.id ? stop.durationSeconds : 0,
+  })) : null, [sectors, elapsed, referenceSectors, stop]);
+  const stopSample = useMemo(() => sampleSimulatedStop(stop, elapsed), [stop, elapsed]);
   const boundaries = useMemo(
     () => sectors?.slice(0, -1).map((x) => ({ id: x.id, position: x.endPosition })) ?? undefined,
     [sectors],
@@ -158,16 +177,27 @@ export default function RouteSimulation({
     setAutoPaused(false);
     go('ended');
   };
-  const changeSectorCount = (next: PracticeSectorCount) => {
-    if (statusRef.current === 'running' || statusRef.current === 'paused' || next === sectorCount) return;
-    tap();
-    setSectorCount(next);
+  const resetConfiguration = () => {
     setLastCompleted(null);
     setBaseline(null);
     elapsedRef.current = 0;
     setElapsed(0);
     setAutoPaused(false);
     go('idle');
+  };
+  const changeSectorCount = (next: PracticeSectorCount) => {
+    if (statusRef.current === 'running' || statusRef.current === 'paused' || next === sectorCount) return;
+    tap();
+    setSectorCount(next);
+    setStopConfig((previous) => ({ ...previous, sectorId: Math.min(previous.sectorId, next) }));
+    resetConfiguration();
+  };
+  const changeStopConfig = (next: SimulatedStopConfig) => {
+    if (statusRef.current === 'running' || statusRef.current === 'paused'
+      || (next.sectorId === stopConfig.sectorId && next.durationSeconds === stopConfig.durationSeconds)) return;
+    tap();
+    setStopConfig(next);
+    resetConfiguration();
   };
 
   const pct = Math.min(100, Math.max(0, sample.progress * 100));
@@ -178,12 +208,13 @@ export default function RouteSimulation({
       {sectors ? (
         <PracticeSectorConfig count={sectorCount} sectors={sectors} locked={active} onChange={changeSectorCount} />
       ) : null}
+      <SimulationStopConfig value={stopConfig} sectorCount={sectorCount} locked={active} onChange={changeStopConfig} />
 
       {status === 'idle' ? (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.heading, { color: colors.foreground }]}>Rehearse this route</Text>
           <Text style={[styles.body, { color: colors.mutedForeground }]}>
-            Plays back the real Mapbox geometry and {model.stepCount} steps at Mapbox estimated speeds. No GPS is used and nothing is saved.
+            Plays back the real Mapbox geometry and {model.stepCount} steps using Mapbox estimates{stop ? ' plus your synthetic stop' : ''}. No GPS is used and nothing is persisted.
           </Text>
           <SpeedPicker speed={speed} onChange={setSpeed} />
           <Pressable
@@ -201,6 +232,16 @@ export default function RouteSimulation({
 
       {active ? (
         <>
+          {stop ? (
+            <InfoPanel
+              icon="clock"
+              title={stopSample.phase === 'holding' ? `Synthetic stop · ${Math.ceil(stopSample.remainingSeconds)}s left`
+                : stopSample.phase === 'passed' ? 'Synthetic stop completed' : `Synthetic stop planned in S${stop.sectorId}`}
+              body={stopSample.phase === 'holding'
+                ? `The simulated marker is stationary halfway through S${stop.sectorId}. This ${stop.durationSeconds}s delay is not live traffic. Pause freezes the countdown.`
+                : `Added delay: ${stop.durationSeconds}s in S${stop.sectorId}, separate from the original Mapbox estimate.`}
+            />
+          ) : null}
           <View style={[styles.instructionCard, { backgroundColor: colors.accent, borderColor: colors.border }]}>
             <View style={styles.rowBetween}>
               <Text style={[styles.tag, { color: colors.accentForeground }]}>
@@ -215,7 +256,8 @@ export default function RouteSimulation({
               {sample.instruction}
             </Text>
             <Text style={[styles.distance, { color: colors.primary }]}>
-              {sample.nextInstruction ? `Next instruction in ${miles(sample.distanceToNextMeters)}` : `Arrival in ${miles(sample.distanceToNextMeters)}`}
+              {stopSample.phase === 'holding' ? `Synthetic delay · ${Math.ceil(stopSample.remainingSeconds)}s remaining`
+                : sample.nextInstruction ? `Next instruction in ${miles(sample.distanceToNextMeters)}` : `Arrival in ${miles(sample.distanceToNextMeters)}`}
             </Text>
             {sample.nextInstruction ? (
               <View style={[styles.next, { borderColor: colors.border }]}>
@@ -230,7 +272,7 @@ export default function RouteSimulation({
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.metrics}>
               <Metric value={miles(sample.remainingMeters)} label="remaining (simulated)" />
-              <Metric value={clock(sample.remainingSeconds)} label="Mapbox estimate left" />
+              <Metric value={clock(sample.remainingSeconds)} label={stop ? 'simulated time left' : 'Mapbox estimate left'} />
               <Metric value={`${pct.toFixed(1)}%`} label="progress" />
             </View>
             <View
@@ -266,14 +308,23 @@ export default function RouteSimulation({
             <Metric value={clock(elapsed)} label="simulated route time" />
             <Metric value={`${pct.toFixed(1)}%`} label="of route covered" />
           </View>
+          {stop ? (
+            <InfoPanel
+              icon="clock"
+              title="Mapbox estimate + synthetic delay"
+              body={status === 'finished'
+                ? `Original Mapbox estimate ${clock(reference!.durationSeconds)} + synthetic stop ${clock(stop.durationSeconds)} = simulated total ${clock(elapsed)}. The added delay belongs to S${stop.sectorId}.`
+                : `Replayed Mapbox time ${clock(elapsed - stopSample.elapsedSeconds)} + ${clock(stopSample.elapsedSeconds)} of the configured ${clock(stop.durationSeconds)} synthetic stop. Unreached time is not counted.`}
+            />
+          ) : null}
           {splits ? <SimulationSectorSplits splits={splits} baseline={baseline} mode="done" /> : null}
           {status === 'ended' ? (
             <Text style={[styles.body, { color: colors.mutedForeground }]}>
-              {miles(sample.remainingMeters)} and about {clock(sample.remainingSeconds)} of the Mapbox estimate were not simulated.
+              {miles(sample.remainingMeters)} and about {clock(sample.remainingSeconds)} of the {stop ? 'configured simulation' : 'Mapbox estimate'} were not simulated.
             </Text>
           ) : null}
           <Text style={[styles.body, { color: colors.mutedForeground }]}>
-            Times come from Mapbox estimates, not your driving. This is not a journey record and no bests were changed.
+            Times use Mapbox estimates{stop ? ' plus the configured synthetic stop' : ''}, not your driving. This is not a journey record and no bests were changed.
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -290,7 +341,7 @@ export default function RouteSimulation({
       <InfoPanel
         icon="cpu"
         title="Simulation only"
-        body="No GPS, no background tracking and no persistence. Position is interpolated along the Mapbox route at estimated speeds."
+        body="No GPS, no background tracking and no persistence. Movement follows Mapbox estimates; optional synthetic stops add a labelled stationary delay."
       />
     </View>
   );

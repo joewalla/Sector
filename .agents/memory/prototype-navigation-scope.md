@@ -16,3 +16,11 @@ Compare sector splits only against a fully completed replay of the same unchange
 **Why:** The prototype is testing timing calculations, not measuring driving or inventing improvements. Refetching traffic estimates between comparison runs would silently change the baseline.
 
 **How to apply:** Treat Mapbox times as simulation inputs. Partial runs never replace a completed comparison baseline. A changed sector configuration clears the old comparison even if the user later returns to the earlier count. Keep replays separate from real personal bests and avoid language that rewards speed.
+
+## Synthetic delays are not provider estimates
+
+Keep an unchanged Mapbox reference when adding an explicitly configured synthetic stop. Compare completed replays only with the same stop configuration; configuration changes clear that comparison.
+
+**Why:** A synthetic delay must never be presented as live traffic or measured driving. Placing it inside a selected sector, rather than on a boundary, gives unambiguous attribution to that sector.
+
+**How to apply:** Show the original estimate and added delay separately, include only consumed delay for early-ended runs, and freeze synthetic countdowns when playback is paused. Faster playback must not change the delay in simulation seconds.

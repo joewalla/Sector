@@ -12,6 +12,8 @@ export type SectorSplitView = {
   status: SplitStatus;
   splitSeconds: number;
   cumulativeSeconds: number | null;
+  mapboxDurationSeconds?: number;
+  syntheticStopSeconds?: number;
 };
 
 const miles = (m: number) => `${(Math.max(0, m) / 1609.344).toFixed(m < 1609 ? 2 : 1)} mi`;
@@ -48,8 +50,8 @@ export default function SimulationSectorSplits({
       </View>
       <Text style={[styles.body, { color: colors.mutedForeground }]}>
         {mode === 'idle'
-          ? 'Sector times are Mapbox estimates on this frozen route. Replaying it gives the same splits at any playback speed.'
-          : 'Practice only. Times are Mapbox estimates, separate from real journeys and personal bests.'}
+          ? 'Sector times use Mapbox estimates plus any labelled synthetic stop. Replaying this same configuration gives the same splits at any playback speed.'
+          : 'Practice only. Times use Mapbox estimates plus any labelled synthetic stop, separate from real journeys and personal bests.'}
       </Text>
       {splits.map((s) => {
         const pct = s.status === 'complete' ? 1 : s.status === 'active' && s.durationSeconds > 0
@@ -69,7 +71,8 @@ export default function SimulationSectorSplits({
               <Text style={[styles.tag, { color: mode === 'idle' ? colors.mutedForeground : tone }]}>{stateLabel}</Text>
             </View>
             <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-              {miles(s.startMeters)} to {miles(s.endMeters)} · est. {splitClock(s.durationSeconds)}
+              {miles(s.startMeters)} to {miles(s.endMeters)} · Mapbox {splitClock(s.mapboxDurationSeconds ?? s.durationSeconds)}
+              {s.syntheticStopSeconds ? ` + ${s.syntheticStopSeconds}s synthetic stop` : ''}
             </Text>
             {mode !== 'idle' ? (
               <>
@@ -90,6 +93,11 @@ export default function SimulationSectorSplits({
                   <Text style={[styles.meta, { color: colors.mutedForeground }]}>
                     Previous replay {splitClock(base)}
                     {s.status === 'complete' ? ` · ${delta(s.splitSeconds - base)}` : ''}
+                  </Text>
+                ) : null}
+                {s.status === 'complete' && s.mapboxDurationSeconds != null ? (
+                  <Text style={[styles.meta, { color: colors.signalBlue }]}>
+                    {s.syntheticStopSeconds ? `Added synthetic delay: +${s.syntheticStopSeconds}s vs Mapbox` : 'No added synthetic delay vs Mapbox'}
                   </Text>
                 ) : null}
               </>

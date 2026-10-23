@@ -26,7 +26,7 @@ export type SimulationSectorSplit = SimulationSector & {
  * An exact internal boundary belongs to the preceding sector at its first
  * crossing; trailing stationary time is included in the final sector.
  */
-function secondsAtDistance(model: SimulationRoute, meters: number): number {
+export function simulationSecondsAtDistance(model: SimulationRoute, meters: number): number {
   if (meters <= 0) return 0;
   if (meters >= model.distanceMeters) return model.durationSeconds;
   for (const segment of model.segments) {
@@ -45,8 +45,8 @@ export function buildSimulationSectors(model: SimulationRoute, count = 3): Simul
   return Array.from({ length: count }, (_, index) => {
     const startMeters = model.distanceMeters * index / count;
     const endMeters = index === count - 1 ? model.distanceMeters : model.distanceMeters * (index + 1) / count;
-    const startSeconds = secondsAtDistance(model, startMeters);
-    const endSeconds = secondsAtDistance(model, endMeters);
+    const startSeconds = simulationSecondsAtDistance(model, startMeters);
+    const endSeconds = simulationSecondsAtDistance(model, endMeters);
     return {
       id: index + 1,
       startMeters,

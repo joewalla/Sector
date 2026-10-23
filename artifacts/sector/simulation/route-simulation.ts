@@ -34,6 +34,24 @@ export type SimulationSample = {
   finished: boolean;
 };
 
+/** Only eligible foreground playback advances time; paused wall time is discarded. */
+export function advancePlaybackClock({
+  elapsedSeconds, deltaSeconds, rate, durationSeconds, running,
+}: {
+  elapsedSeconds: number;
+  deltaSeconds: number;
+  rate: number;
+  durationSeconds: number;
+  running: boolean;
+}): number {
+  if (![elapsedSeconds, deltaSeconds, rate, durationSeconds].every(Number.isFinite)
+    || deltaSeconds < 0 || rate <= 0 || durationSeconds <= 0) {
+    throw new Error('Invalid simulation clock input.');
+  }
+  const current = Math.max(0, Math.min(durationSeconds, elapsedSeconds));
+  return running ? Math.min(durationSeconds, current + deltaSeconds * rate) : current;
+}
+
 function distance(a: Coordinate, b: Coordinate): number {
   const radians = Math.PI / 180;
   const dLat = (b.latitude - a.latitude) * radians;

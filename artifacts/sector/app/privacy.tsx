@@ -36,7 +36,7 @@ export default function PrivacyScreen() {
         <InfoPanel
           icon="cpu"
           title="Route simulations"
-          body="The London demo uses fixed example locations, not your GPS. Simulations replay Mapbox route estimates on this device. They do not save journey records or change your bests."
+          body="The London demo uses fixed example locations, not your GPS. Simulations replay Mapbox route estimates with any explicitly configured synthetic stop. These stops are not live traffic or measured driving. Simulations do not save journey records or change your bests."
         />
         <InfoPanel
           icon="shield"
