@@ -1,0 +1,247 @@
+PROJECT BRIEF: SECTOR — GPS NAVIGATION & PERFORMANCE APP
+
+1. The vision
+
+Build a real, fully functional iPhone app called Sector.
+
+Sector is a modern, premium, motorsport-inspired navigation app that combines everyday turn-by-turn GPS navigation with Formula 1-inspired sector timing, journey statistics and personal bests.
+
+The concept is simple: users should be able to navigate to any destination, have their journey automatically timed and divided into sectors, and review their performance when they arrive.
+
+Users must not need to create a route in advance or manually place timing checkpoints. Sector should work with any supported destination and automatically handle sector timing for each journey.
+
+The app should feel like a polished commercial product, not a generic AI-generated app template.
+
+I have some coding experience but need guidance. Explain important technical decisions in straightforward language, build incrementally, and help me test the app on my physical iPhone.
+
+2. Branding and visual identity
+
+The app name is Sector.
+
+The brand should feel premium, modern, minimal and inspired by Formula 1 timing systems and motorsport telemetry.
+
+Design principles:
+
+* Dark interface with a near-black or charcoal background.
+* Clean, modern typography.
+* Restrained racing-inspired accent colours, such as purple, electric blue or lime green.
+* Large, readable timing figures.
+* Crisp lines, subtle dividers and carefully spaced layouts.
+* Minimal clutter, with navigation information prioritised.
+* Smooth, purposeful transitions and subtle animations.
+* A distinctive Sector wordmark and simple geometric branding.
+
+Avoid excessive gradients, unnecessary glass effects, cartoon graphics and generic dashboard layouts.
+
+The app must be easy to read at a glance. Navigation and road safety must always take priority over decorative elements.
+
+3. Platform and technology
+
+Build a genuine iOS mobile app using:
+
+* React Native.
+* Expo, using a development build when native functionality requires it.
+* TypeScript.
+* A suitable mapping and navigation SDK, investigating Mapbox Navigation first.
+* SQLite or another appropriate persistent local database for journeys and timing records.
+
+Before committing to a navigation implementation, verify that the selected SDK and its React Native integration are compatible with the current Expo and iOS versions.
+
+If native modules or custom iOS configuration are required, explain this before proceeding.
+
+Do not substitute a web page, static map, simulated GPS or fake navigation for the actual mobile functionality.
+
+Keep the code modular, maintainable and easy to extend. Separate navigation, GPS tracking, sector calculations, storage and UI into distinct components or services.
+
+4. Core feature: turn-by-turn navigation
+
+Users must be able to:
+
+1. Open Sector and enter a destination.
+2. Search for a place or address.
+3. See matching destinations and select one.
+4. Preview the route before starting.
+5. See the estimated journey time and distance.
+6. Start navigation.
+7. Follow their position on a live map.
+8. Receive clear next-turn instructions and voice guidance.
+9. See their remaining distance and estimated arrival time.
+10. Receive updated directions when the route changes or they miss a turn.
+11. Finish the journey and view their results.
+
+Use genuine routing and location data. Handle denied location permissions, GPS loss, inaccurate positioning, network failures and unavailable routes gracefully.
+
+The navigation experience must remain usable while driving without requiring the user to interact with the phone.
+
+5. Core feature: automatic sector timing
+
+This is one of the defining features of Sector.
+
+Every journey should be timed automatically, regardless of whether the user has travelled that route before.
+
+For the initial version:
+
+* Start the journey timer when the user begins navigation.
+* Use the planned route’s distance to divide the journey into three approximately equal-distance sectors.
+* Calculate sector boundaries along the actual route geometry, not using straight-line distance.
+* Detect when the user reaches each boundary using route progress and reliable GPS measurements.
+* Record elapsed time at each boundary.
+* Display the current sector and its elapsed time.
+* Display completed sector split times.
+* Stop the overall timer when the destination is reached or the user explicitly finishes the journey.
+* Show the final journey time, distance and sector splits.
+* Save the completed journey locally.
+
+Use a monotonic clock for elapsed-time measurements so that changes to the phone’s system clock do not distort timings.
+
+GPS positions can be inaccurate, so use appropriate location-accuracy checks, route matching, boundary tolerance and duplicate-event protection. Avoid recording a split multiple times or triggering sectors when the user is far from the planned route.
+
+If the route changes significantly because of rerouting, recalculate the remaining sector boundaries and mark the journey as rerouted. Do not silently treat substantially different routes as directly comparable.
+
+Handle very short routes gracefully, and do not generate meaningless sector splits.
+
+6. Personal bests and journey history
+
+Create a journey history containing:
+
+* Date and time.
+* Starting point and destination.
+* Total distance.
+* Total elapsed time.
+* Sector split times.
+* Route information.
+* Whether the journey was rerouted or incomplete.
+
+Allow users to revisit completed journeys and see their results.
+
+Store data persistently so it remains available after closing and reopening the app.
+
+Introduce personal-best comparisons only when journeys have sufficiently comparable routes and timing conditions. Clearly identify when a comparison is not valid.
+
+The first version does not need user accounts, cloud synchronisation, social features or leaderboards.
+
+7. Main screens
+
+Create the following screens:
+
+Home
+
+* Sector branding.
+* Prominent destination search.
+* Start a journey.
+* Recent destinations or journeys.
+* Quick access to saved history and personal bests.
+
+Destination search
+
+* Search field.
+* Search results.
+* Destination selection.
+* Route preview.
+
+Active navigation
+
+* Live map.
+* Current position.
+* Route line.
+* Next-turn instruction.
+* Distance to the next turn.
+* Estimated arrival time.
+* Current sector and elapsed time.
+* Completed sector splits.
+* Clear journey controls.
+
+Journey results
+
+* Total journey time.
+* Distance travelled.
+* Sector split table.
+* Route summary.
+* Personal-best comparison when valid.
+* Save and review options.
+
+Journey history
+
+* List of previous journeys.
+* Journey details.
+* Sector comparisons.
+* Personal-best records.
+
+Use a bottom navigation bar or another appropriate navigation pattern, keeping the active driving screen uncluttered.
+
+8. Safety, privacy and speed validation
+
+Sector is a navigation and journey-timing app, not an encouragement to drive faster.
+
+* Never encourage speeding or competitive driving on public roads.
+* Do not display targets or instructions that encourage unsafe driving.
+* Request location permissions transparently.
+* Explain how location data is used.
+* Collect only the data required for the app’s functionality.
+* Make clear when location tracking is active.
+* Handle background location tracking only with appropriate permissions and iOS configuration.
+* Do not claim GPS can reliably establish legal speed compliance in every situation.
+
+A future feature may flag or invalidate a run based on predefined safety rules and reliable measurements, but do not implement automatic speeding-based invalidation in the first version.
+
+Do not make background tracking or battery usage claims until they have been tested on a physical iPhone.
+
+9. Development approach
+
+Build the project in stages.
+
+Stage 1: Foundation
+
+* Establish the project structure.
+* Implement the branding, navigation between screens and responsive layouts.
+* Create the home, destination search, active navigation and results screens.
+* Use clearly labelled temporary data only where necessary to develop the interface.
+
+Stage 2: Navigation proof of concept
+
+* Integrate genuine destination search and routing.
+* Implement GPS location and turn-by-turn navigation.
+* Test the selected navigation SDK on a physical iPhone.
+* Confirm that the app can reroute correctly.
+
+Stage 3: Sector timing
+
+* Implement automatic route-distance-based sector boundaries.
+* Record accurate elapsed times and split events.
+* Test inaccurate GPS, boundary crossings and route changes.
+
+Stage 4: Persistence
+
+* Save journeys and results.
+* Implement journey history and personal-best comparisons.
+* Verify that data survives app restarts.
+
+Stage 5: Reliability
+
+* Test permissions, GPS dropouts, interruptions, background behaviour and battery consumption.
+* Resolve bugs before adding more features.
+
+10. Important instructions for the AI developer
+
+Do not attempt to implement every feature in one enormous code change.
+
+Start by reviewing this specification and proposing a practical technical architecture. Identify any major risks, particularly around native navigation integration, Expo compatibility and background GPS.
+
+Then begin Stage 1.
+
+After each stage:
+
+* Explain what was implemented.
+* Tell me how to run it.
+* Identify any manual setup or API keys required.
+* Explain how to test it on my iPhone.
+* List known limitations and outstanding issues.
+* Ask for my feedback before making major design changes.
+
+Do not claim that functionality is complete unless it has been implemented and appropriately tested.
+
+Do not hardcode fake navigation results or expose API secrets in client-side code.
+
+Prioritise a small, reliable working product over a large collection of unfinished features.
+
+The immediate goal is to establish the Sector app foundation and prove that genuine turn-by-turn navigation can work on my iPhone before building the full timing system.
