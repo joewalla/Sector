@@ -2,41 +2,47 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import {
   SIMULATED_STOP_DURATIONS,
+  MAX_SIMULATED_STOPS,
   type SimulatedStopConfig,
 } from '@/simulation/simulated-stop';
 
 export default function SimulationStopConfig({
   value, sectorCount, locked, onChange,
 }: {
-  value: SimulatedStopConfig;
+  value: SimulatedStopConfig[];
   sectorCount: number;
   locked: boolean;
-  onChange: (next: SimulatedStopConfig) => void;
+  onChange: (next: SimulatedStopConfig[]) => void;
 }) {
   const colors = useColors();
-  const enabled = value.durationSeconds > 0;
-  const options = (kind: 'duration' | 'sector', values: number[]) => (
+  const update = (index: number, next: SimulatedStopConfig) => {
+    if (locked) return;
+    if (next.durationSeconds === 0) onChange(value.filter((_, i) => i !== index));
+    else if (!value.length) onChange([next]);
+    else onChange(value.map((item, i) => i === index ? next : item));
+  };
+  const options = (kind: 'duration' | 'sector', values: number[], item: SimulatedStopConfig, index: number) => (
     <View
       accessibilityRole="radiogroup"
-      accessibilityLabel={kind === 'duration' ? 'Simulated stop duration' : 'Sector containing the simulated stop'}
+      accessibilityLabel={`Stop ${index + 1}: ${kind === 'duration' ? 'duration' : 'practice sector'}`}
       style={styles.options}
     >
       {values.map((option) => {
-        const selected = option === (kind === 'duration' ? value.durationSeconds : value.sectorId);
+        const selected = option === (kind === 'duration' ? item.durationSeconds : item.sectorId);
         const label = kind === 'duration' ? option === 0 ? 'Off' : `${option}s` : `S${option}`;
         return (
           <Pressable
             key={option}
-            testID={`simulated-stop-${kind}-${option}`}
+            testID={index === 0 ? `simulated-stop-${kind}-${option}` : `simulated-stop-${index + 1}-${kind}-${option}`}
             accessibilityRole="radio"
             accessibilityLabel={kind === 'duration'
               ? option === 0 ? 'No simulated stop' : `${option} simulated seconds`
-              : `Stop halfway through sector ${option}`}
+              : `Stop ${index + 1} in sector ${option}`}
             accessibilityState={{ selected, disabled: locked }}
             disabled={locked}
-            onPress={() => onChange(kind === 'duration'
-              ? { ...value, durationSeconds: option as SimulatedStopConfig['durationSeconds'] }
-              : { ...value, sectorId: option })}
+            onPress={() => update(index, kind === 'duration'
+              ? { ...item, durationSeconds: option as SimulatedStopConfig['durationSeconds'] }
+              : { ...item, sectorId: option })}
             style={({ pressed }) => [
               styles.option,
               { backgroundColor: selected ? colors.primary : colors.secondary, borderColor: colors.border },
@@ -51,19 +57,44 @@ export default function SimulationStopConfig({
   );
   return (
     <View testID="simulated-stop-config" style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Text style={[styles.title, { color: colors.foreground }]}>Optional simulated stop</Text>
+      <Text style={[styles.title, { color: colors.foreground }]}>Optional simulated stops · {value.length}/{MAX_SIMULATED_STOPS}</Text>
       <Text style={[styles.body, { color: colors.mutedForeground }]}>
-        Add a stationary delay to practise timing. This is a synthetic stop, not measured driving or live traffic.
+        Add up to three stationary delays to practise timing. These are synthetic stops, not measured driving or live traffic.
       </Text>
-      {options('duration', [...SIMULATED_STOP_DURATIONS])}
-      {enabled ? (
-        <>
-          <Text style={[styles.body, { color: colors.foreground }]}>Choose the practice sector</Text>
-          {options('sector', Array.from({ length: sectorCount }, (_, index) => index + 1))}
-        </>
+      {(value.length ? value : [{ sectorId: 1, durationSeconds: 0 as const }]).map((item, index) => {
+        const local = value.filter((stop) => stop.sectorId === item.sectorId);
+        const ordinal = value.slice(0, index).filter((stop) => stop.sectorId === item.sectorId).length + 1;
+        return (
+          <View key={index} style={styles.stop}>
+            <Text style={[styles.title, { color: colors.foreground }]}>Stop {index + 1}</Text>
+            {options('duration', [...SIMULATED_STOP_DURATIONS], item, index)}
+            {item.durationSeconds > 0 ? (
+              <>
+                <Text style={[styles.body, { color: colors.foreground }]}>Choose the practice sector · Off removes this stop</Text>
+                {options('sector', Array.from({ length: sectorCount }, (_, i) => i + 1), item, index)}
+                <Text style={[styles.body, { color: colors.signalBlue }]}>
+                  +{item.durationSeconds}s in S{item.sectorId} · position {ordinal} of {local.length}, {Math.round(ordinal / (local.length + 1) * 100)}% through the sector
+                </Text>
+              </>
+            ) : null}
+          </View>
+        );
+      })}
+      {value.length > 0 ? (
+        <Pressable
+          testID="simulated-stop-add"
+          accessibilityRole="button"
+          accessibilityLabel="Add simulated stop"
+          accessibilityState={{ disabled: locked || value.length >= MAX_SIMULATED_STOPS }}
+          disabled={locked || value.length >= MAX_SIMULATED_STOPS}
+          onPress={() => { if (!locked && value.length < MAX_SIMULATED_STOPS) onChange([...value, { sectorId: 1, durationSeconds: 30 }]); }}
+          style={[styles.option, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+        >
+          <Text style={[styles.optionText, { color: colors.foreground }]}>{value.length >= MAX_SIMULATED_STOPS ? 'Three-stop limit reached' : 'Add simulated stop'}</Text>
+        </Pressable>
       ) : null}
       <Text accessibilityLiveRegion="polite" style={[styles.body, { color: colors.signalBlue }]}>
-        {enabled ? `Add ${value.durationSeconds}s halfway through S${value.sectorId}. Only that sector's split gains the delay.` : 'Off · replay only the Mapbox route estimate.'}
+        {value.length ? `Total added: ${value.reduce((sum, stop) => sum + stop.durationSeconds, 0)}s. Stops in the same sector are evenly spaced inside it; only that sector gains their delay.` : 'Off · replay only the Mapbox route estimate.'}
       </Text>
       <Text style={[styles.note, { color: colors.mutedForeground }]}>
         {locked
@@ -75,6 +106,7 @@ export default function SimulationStopConfig({
 }
 
 const styles = StyleSheet.create({
+  stop: { gap: 10 },
   card: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
   title: { fontSize: 14, fontWeight: '700' },
   body: { fontSize: 12, lineHeight: 18 },

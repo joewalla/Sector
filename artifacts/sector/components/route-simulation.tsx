@@ -9,7 +9,7 @@ import { Eyebrow, InfoPanel } from '@/components/sector-ui';
 import RouteMapPreview from './route-map-preview';
 import { advancePlaybackClock, buildSimulationRoute, sampleSimulation } from '@/simulation/route-simulation';
 import { buildSimulationSectors, sampleSectorSplits, type PracticeSectorCount } from '@/simulation/sector-timing';
-import { configureSimulatedStop, sampleSimulatedStop, type SimulatedStopConfig } from '@/simulation/simulated-stop';
+import { configureSimulatedStops, sampleSimulatedStop, type SimulatedStopConfig } from '@/simulation/simulated-stop';
 import SimulationSectorSplits from './simulation-sector-splits';
 import PracticeSectorConfig from './practice-sector-config';
 import SimulationStopConfig from './simulation-stop-config';
@@ -49,11 +49,12 @@ export default function RouteSimulation({
   }, [route]);
   const reference = built.model;
   const [sectorCount, setSectorCount] = useState<PracticeSectorCount>(3);
-  const [stopConfig, setStopConfig] = useState<SimulatedStopConfig>({ sectorId: 1, durationSeconds: 0 });
-  const configured = useMemo(() => reference ? configureSimulatedStop(reference, sectorCount, stopConfig) : null,
+  const [stopConfig, setStopConfig] = useState<SimulatedStopConfig[]>([]);
+  const configured = useMemo(() => reference ? configureSimulatedStops(reference, sectorCount, stopConfig) : null,
     [reference, sectorCount, stopConfig]);
   const model = configured?.model ?? null;
-  const stop = configured?.stop ?? null;
+  const stops = configured?.stops;
+  const hasStops = !!stops?.length;
   const referenceSectors = useMemo(() => reference ? buildSimulationSectors(reference, sectorCount) : null, [reference, sectorCount]);
   const sectors = useMemo(() => model ? buildSimulationSectors(model, sectorCount) : null, [model, sectorCount]);
   // Memory-only practice comparison. Cleared on unmount (parent keys this component by route).
@@ -141,9 +142,12 @@ export default function RouteSimulation({
   const splits = useMemo(() => sectors ? sampleSectorSplits(sectors, elapsed).map((split, index) => ({
     ...split,
     mapboxDurationSeconds: referenceSectors![index].durationSeconds,
-    syntheticStopSeconds: stop?.sectorId === split.id ? stop.durationSeconds : 0,
-  })) : null, [sectors, elapsed, referenceSectors, stop]);
+    syntheticStopSeconds: stops?.filter((stop) => stop.sectorId === split.id).reduce((sum, stop) => sum + stop.durationSeconds, 0) ?? 0,
+    consumedStopSeconds: stops?.filter((stop) => stop.sectorId === split.id).reduce((sum, stop) => sum + sampleSimulatedStop(stop, elapsed).elapsedSeconds, 0) ?? 0,
+  })) : null, [sectors, elapsed, referenceSectors, stops]);
+  const stop = stops?.find((item) => elapsed < item.endSeconds) ?? stops?.at(-1) ?? null;
   const stopSample = useMemo(() => sampleSimulatedStop(stop, elapsed), [stop, elapsed]);
+  const consumedStopSeconds = stops?.reduce((sum, item) => sum + sampleSimulatedStop(item, elapsed).elapsedSeconds, 0) ?? 0;
   const boundaries = useMemo(
     () => sectors?.slice(0, -1).map((x) => ({ id: x.id, position: x.endPosition })) ?? undefined,
     [sectors],
@@ -211,12 +215,12 @@ export default function RouteSimulation({
     if (statusRef.current === 'running' || statusRef.current === 'paused' || next === sectorCount) return;
     tap();
     setSectorCount(next);
-    setStopConfig((previous) => ({ ...previous, sectorId: Math.min(previous.sectorId, next) }));
+    setStopConfig((previous) => previous.map((stop) => ({ ...stop, sectorId: Math.min(stop.sectorId, next) })));
     resetConfiguration();
   };
-  const changeStopConfig = (next: SimulatedStopConfig) => {
+  const changeStopConfig = (next: SimulatedStopConfig[]) => {
     if (statusRef.current === 'running' || statusRef.current === 'paused'
-      || (next.sectorId === stopConfig.sectorId && next.durationSeconds === stopConfig.durationSeconds)) return;
+      || JSON.stringify(next) === JSON.stringify(stopConfig)) return;
     tap();
     setStopConfig(next);
     resetConfiguration();
@@ -238,7 +242,7 @@ export default function RouteSimulation({
           Drag to any point or select a sector boundary. Scrubbing pauses playback and excludes this run from replay comparisons. Restart for a comparable replay.
         </Text>
         <Text testID="simulation-selected-time" style={[styles.body, { color: colors.foreground }]}>
-          {clock(elapsed)} / {clock(model.durationSeconds)} · {stop ? 'includes synthetic delay' : 'Mapbox route time'}
+           {clock(elapsed)} / {clock(model.durationSeconds)} · {hasStops ? 'includes synthetic delay' : 'Mapbox route time'}
         </Text>
         <SimulationTimeSlider value={elapsed} duration={model.durationSeconds} valueText={`${clock(elapsed)} of ${clock(model.durationSeconds)}`} onSeek={seek} />
         <View style={styles.seekPoints}>
@@ -269,7 +273,7 @@ export default function RouteSimulation({
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.heading, { color: colors.foreground }]}>Rehearse this route</Text>
           <Text style={[styles.body, { color: colors.mutedForeground }]}>
-            Plays back the real Mapbox geometry and {model.stepCount} steps using Mapbox estimates{stop ? ' plus your synthetic stop' : ''}. No GPS is used and nothing is persisted.
+            Plays back the real Mapbox geometry and {model.stepCount} steps using Mapbox estimates{hasStops ? ' plus your synthetic stops' : ''}. No GPS is used and nothing is persisted.
           </Text>
           <SpeedPicker speed={speed} onChange={setSpeed} />
           <Pressable
@@ -293,8 +297,8 @@ export default function RouteSimulation({
               title={stopSample.phase === 'holding' ? `Synthetic stop · ${Math.ceil(stopSample.remainingSeconds)}s left`
                 : stopSample.phase === 'passed' ? 'Synthetic stop completed' : `Synthetic stop planned in S${stop.sectorId}`}
               body={stopSample.phase === 'holding'
-                ? `The simulated marker is stationary halfway through S${stop.sectorId}. This ${stop.durationSeconds}s delay is not live traffic. Pause freezes the countdown.`
-                : `Added delay: ${stop.durationSeconds}s in S${stop.sectorId}, separate from the original Mapbox estimate.`}
+                 ? `The simulated marker is stationary inside S${stop.sectorId} for stop ${stop.configIndex + 1}. This ${stop.durationSeconds}s delay is not live traffic. Pause freezes the countdown.`
+                 : `Stop ${stop.configIndex + 1}: ${stop.durationSeconds}s in S${stop.sectorId}. ${stops!.filter((item) => elapsed >= item.endSeconds).length}/${stops!.length} stops completed, separate from the original Mapbox estimate.`}
             />
           ) : null}
           <View style={[styles.instructionCard, { backgroundColor: colors.accent, borderColor: colors.border }]}>
@@ -368,11 +372,11 @@ export default function RouteSimulation({
             <InfoPanel
               icon="clock"
               title="Mapbox estimate + synthetic delay"
-              body={inspectionOnly
-                ? `Selected route time: ${clock(elapsed - stopSample.elapsedSeconds)} of Mapbox time + ${clock(stopSample.elapsedSeconds)} of synthetic delay. These are inspected values, not a replay record.`
-                : status === 'finished'
-                ? `Original Mapbox estimate ${clock(reference!.durationSeconds)} + synthetic stop ${clock(stop.durationSeconds)} = simulated total ${clock(elapsed)}. The added delay belongs to S${stop.sectorId}.`
-                : `Replayed Mapbox time ${clock(elapsed - stopSample.elapsedSeconds)} + ${clock(stopSample.elapsedSeconds)} of the configured ${clock(stop.durationSeconds)} synthetic stop. Unreached time is not counted.`}
+               body={`Original Mapbox estimate ${clock(reference!.durationSeconds)}. ${
+                 inspectionOnly ? 'Selected' : 'Replayed'
+               } Mapbox time ${clock(elapsed - consumedStopSeconds)} + ${clock(consumedStopSeconds)} synthetic delay = ${clock(elapsed)} simulated total. ${
+                 inspectionOnly ? 'Inspection only; no replay record.' : 'Unreached time is not counted.'
+               }\n${stops!.map((item) => `Stop ${item.configIndex + 1} · S${item.sectorId}: +${clock(sampleSimulatedStop(item, elapsed).elapsedSeconds)} of ${clock(item.durationSeconds)} configured (${sampleSimulatedStop(item, elapsed).phase === 'upcoming' ? 'not reached' : sampleSimulatedStop(item, elapsed).phase === 'holding' ? 'partial' : 'complete'}).`).join('\n')}`}
             />
           ) : null}
           {splits ? <SimulationSectorSplits splits={splits} baseline={inspectionOnly ? null : baseline} mode={inspectionOnly ? 'inspection' : 'done'} /> : null}
@@ -382,7 +386,7 @@ export default function RouteSimulation({
             </Text>
           ) : null}
           <Text style={[styles.body, { color: colors.mutedForeground }]}>
-            Times use Mapbox estimates{stop ? ' plus the configured synthetic stop' : ''}, not your driving. This is not a journey record and no bests were changed.
+            Times use Mapbox estimates{hasStops ? ' plus the configured synthetic stops' : ''}, not your driving. This is not a journey record and no bests were changed.
           </Text>
           <Pressable
             accessibilityRole="button"

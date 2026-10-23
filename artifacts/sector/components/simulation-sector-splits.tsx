@@ -14,6 +14,7 @@ export type SectorSplitView = {
   cumulativeSeconds: number | null;
   mapboxDurationSeconds?: number;
   syntheticStopSeconds?: number;
+  consumedStopSeconds?: number;
 };
 
 const miles = (m: number) => `${(Math.max(0, m) / 1609.344).toFixed(m < 1609 ? 2 : 1)} mi`;
@@ -78,6 +79,11 @@ export default function SimulationSectorSplits({
             </Text>
             {mode !== 'idle' ? (
               <>
+                {!!s.syntheticStopSeconds && (
+                  <Text style={[styles.meta, { color: colors.mutedForeground }]}>
+                    Consumed synthetic delay: +{splitClock(s.consumedStopSeconds ?? 0)} of {splitClock(s.syntheticStopSeconds)} configured
+                  </Text>
+                )}
                 <View style={[styles.track, { backgroundColor: colors.secondary }]}>
                   <View style={[styles.fill, { backgroundColor: tone, transform: [{ scaleX: pct }] }]} />
                 </View>

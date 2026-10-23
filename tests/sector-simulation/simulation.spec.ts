@@ -238,8 +238,81 @@ test('synthetic stop countdown and settings remain frozen when paused; partial d
   await page.clock.runFor(750); // 15 simulated stop seconds.
   await expect(page.getByText('Synthetic stop · 15s left', { exact: true })).toBeVisible();
   await page.getByTestId('simulation-end').click();
-  await expect(page.getByText(/Replayed Mapbox time 1:30 \+ 0:15 of the configured 0:30 synthetic stop/)).toBeVisible();
+  await expect(page.getByText(/Replayed Mapbox time 1:30 \+ 0:15 synthetic delay/)).toBeVisible();
+  await expect(page.getByText(/Stop 1 · S2: \+0:15 of 0:30 configured \(partial\)/)).toBeVisible();
   await expect(page.getByTestId('sector-state-2')).toHaveText('PARTIAL');
+  expect(demo.requests()).toBe(1);
+  demo.assertHealthy();
+});
+
+test('three-stop scenarios lock every edit and replay identically before configuration changes clear comparisons', async ({ page }) => {
+  const demo = await openDemo(page);
+  await page.getByTestId('simulated-stop-duration-10').click();
+  await page.getByTestId('simulated-stop-sector-2').click();
+  await page.getByTestId('simulated-stop-add').click();
+  await page.getByTestId('simulated-stop-2-sector-2').click();
+  await page.getByTestId('simulated-stop-add').click();
+  await page.getByTestId('simulated-stop-3-sector-3').click();
+  await page.getByTestId('simulated-stop-3-duration-60').click();
+  await expect(page.getByTestId('simulated-stop-add')).toBeDisabled();
+  await page.getByTestId('simulation-start').click();
+  for (const id of ['simulated-stop-duration-0', 'simulated-stop-2-sector-1', 'simulated-stop-3-duration-0', 'simulated-stop-add']) {
+    await expect(page.getByTestId(id)).toBeDisabled();
+  }
+  await page.getByTestId('simulation-toggle').click();
+  await expect(page.getByTestId('simulated-stop-2-duration-60')).toBeDisabled();
+  await page.clock.runFor(60_000);
+  await expect(page.getByTestId('simulation-selected-time')).toContainText('0:00 / 4:40');
+  await page.getByTestId('simulation-toggle').click();
+  await page.getByTestId('simulation-speed-120').click();
+  await page.clock.runFor(2_500);
+  await expect(page.getByTestId('simulation-result-state')).toHaveText('SIMULATION COMPLETE');
+  for (const [id, seconds] of [[1, '1:00'], [2, '1:40'], [3, '2:00']] as const) {
+    await expect(page.getByTestId(`sector-split-time-${id}`)).toHaveText(`${seconds} split`);
+  }
+  await expect(page.getByText(/Original Mapbox estimate 3:00.*Replayed Mapbox time 3:00 \+ 1:40 synthetic delay/)).toBeVisible();
+  await expect(page.getByText(/Stop 1 · S2: \+0:10 of 0:10 configured \(complete\)/)).toBeVisible();
+  await expect(page.getByText(/Stop 2 · S2: \+0:30 of 0:30 configured \(complete\)/)).toBeVisible();
+  await expect(page.getByText(/Stop 3 · S3: \+1:00 of 1:00 configured \(complete\)/)).toBeVisible();
+  await finish(page, 60, 5_000, true);
+  await expect(page.getByTestId('sector-comparison-2')).toContainText('match');
+  // Removing an entry resets the completed replay even if its remaining neighbours match.
+  await page.getByTestId('simulated-stop-2-duration-0').click();
+  await expect(page.getByTestId('simulation-start')).toBeVisible();
+  await expect(page.getByTestId('sector-comparison-2')).toHaveCount(0);
+  await expect(page.getByTestId('simulation-selected-time')).toContainText('0:00 / 4:10');
+  await finish(page, 120, 2_500);
+  await expect(page.getByTestId('sector-comparison-2')).toHaveCount(0);
+  // Moving a surviving stop also invalidates the full scenario comparison.
+  await page.getByTestId('simulated-stop-2-sector-1').click();
+  await expect(page.getByTestId('simulation-start')).toBeVisible();
+  await finish(page, 120, 2_500);
+  await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+  // Adding a new stop invalidates the newly completed comparison as well.
+  await page.getByTestId('simulated-stop-add').click();
+  await finish(page, 120, 2_500);
+  await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+  expect(demo.requests()).toBe(1);
+  demo.assertHealthy();
+});
+
+test('ending within the second stop attributes consumed delay without counting the third', async ({ page }) => {
+  const demo = await openDemo(page);
+  await page.getByTestId('simulated-stop-duration-10').click(); // S1 midpoint at 30 seconds.
+  await page.getByTestId('simulated-stop-add').click();
+  await page.getByTestId('simulated-stop-2-sector-2').click(); // S2 midpoint at 90 + 10 seconds.
+  await page.getByTestId('simulated-stop-add').click();
+  await page.getByTestId('simulated-stop-3-sector-3').click();
+  await page.getByTestId('simulation-start').click();
+  await page.clock.runFor(5_750); // 115 simulated seconds: 10 full + 15 partial synthetic seconds.
+  await page.getByTestId('simulation-end').click();
+  await expect(page.getByText(/Replayed Mapbox time 1:30 \+ 0:25 synthetic delay/)).toBeVisible();
+  await expect(page.getByText(/Stop 1 · S1: \+0:10 of 0:10 configured \(complete\)/)).toBeVisible();
+  await expect(page.getByText(/Stop 2 · S2: \+0:15 of 0:30 configured \(partial\)/)).toBeVisible();
+  await expect(page.getByText(/Stop 3 · S3: \+0:00 of 0:30 configured \(not reached\)/)).toBeVisible();
+  await expect(page.getByTestId('sector-state-2')).toHaveText('PARTIAL');
+  await expect(page.getByTestId('sector-state-3')).toHaveText('NOT REACHED');
+  await expect(page.getByTestId('sector-split-2')).toContainText('Consumed synthetic delay: +0:15 of 0:30 configured');
   expect(demo.requests()).toBe(1);
   demo.assertHealthy();
 });
