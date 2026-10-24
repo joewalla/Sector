@@ -20,3 +20,9 @@ For cross-platform custom radios, expose checked state in both places: explicit 
 **Why:** React Native Web's tested ARIA behavior does not establish what native assistive technologies receive; their state comes from React Native accessibility props.
 
 **How to apply:** Assert web role, name, checked, and disabled semantics in browser tests, and keep native checked/disabled props on every custom radio. Device screen-reader speech still needs device validation.
+
+When styling locked radios on the web, include `[aria-disabled="true"]` selectors; React Native Web may expose their disabled state through ARIA rather than a native `:disabled` attribute.
+
+**Why:** The forced-colors browser check confirmed that `:disabled` alone did not match the locked radio controls.
+
+**How to apply:** For web-only disabled styles, support both native `:disabled` and `[aria-disabled="true"]` where custom React Native controls are involved.

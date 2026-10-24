@@ -183,6 +183,95 @@ test('practice radio groups expose their accessible names, checked choices, and 
   healthy();
 });
 
+test('practice choices stay distinct and keyboard-focused in forced-colors mode', async ({ page }) => {
+  const healthy = await openLayoutFixture(page);
+  const sector3 = page.getByTestId('practice-sector-count-3');
+  const sector4 = page.getByTestId('practice-sector-count-4');
+  await expect(page.locator('style[data-sector-forced-colors="true"]')).toHaveCount(1);
+  const initialNormalColors = await Promise.all([sector3, sector4].map((choice) => choice.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { backgroundColor: style.backgroundColor, borderColor: style.borderColor };
+  })));
+
+  await page.emulateMedia({ forcedColors: 'active' });
+  expect(await page.evaluate(() => matchMedia('(forced-colors: active)').matches)).toBe(true);
+  await expect(sector3).toHaveAttribute('aria-checked', 'true');
+  await expect(sector4).toHaveAttribute('aria-checked', 'false');
+  const sectorColors = await Promise.all([sector3, sector4].map((choice) => choice.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { backgroundColor: style.backgroundColor, borderColor: style.borderColor };
+  })));
+  expect(sectorColors[0].backgroundColor).not.toBe(sectorColors[1].backgroundColor);
+  expect(sectorColors[0].borderColor).not.toBe(sectorColors[1].borderColor);
+
+  await sector3.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(sector4).toBeFocused();
+  await expect(sector4).toHaveAttribute('aria-checked', 'true');
+  await expect(sector4).toHaveCSS('outline-style', 'solid');
+  await expect(sector4).toHaveCSS('outline-width', '3px');
+
+  const stopOff = page.getByTestId('simulated-stop-duration-0');
+  const stopTen = page.getByTestId('simulated-stop-duration-10');
+  await stopOff.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(stopTen).toBeFocused();
+  await expect(stopTen).toHaveAttribute('aria-checked', 'true');
+  await expect(stopTen).toHaveCSS('outline-style', 'solid');
+  await expect(stopTen).toHaveCSS('outline-width', '3px');
+
+  const stopSector1 = page.getByTestId('simulated-stop-sector-1');
+  const stopSector2 = page.getByTestId('simulated-stop-sector-2');
+  await expect(stopSector1).toBeVisible();
+  await stopSector1.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(stopSector2).toBeFocused();
+  await expect(stopSector2).toHaveAttribute('aria-checked', 'true');
+  await expect(stopSector2).toHaveCSS('outline-style', 'solid');
+
+  const speed20 = page.getByTestId('simulation-speed-20');
+  const speed60 = page.getByTestId('simulation-speed-60');
+  await speed20.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(speed60).toBeFocused();
+  await expect(speed60).toHaveAttribute('aria-checked', 'true');
+  await expect(speed60).toHaveCSS('outline-style', 'solid');
+  await expect(speed60).toHaveCSS('outline-width', '3px');
+
+  await page.emulateMedia({ forcedColors: 'none' });
+  await sector3.click();
+  const restoredNormalColors = await Promise.all([sector3, sector4].map((choice) => choice.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { backgroundColor: style.backgroundColor, borderColor: style.borderColor };
+  })));
+  expect(restoredNormalColors).toEqual(initialNormalColors);
+
+  await page.emulateMedia({ forcedColors: 'active' });
+  await sector4.click();
+  await page.getByRole('button', { name: 'Start simulation', exact: true }).click();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(sector3).toBeDisabled();
+  await expect(sector4).toBeDisabled();
+  await expect(sector4).toHaveAttribute('aria-checked', 'true');
+  const disabledUnselectedColors = await sector3.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { color: style.color, borderColor: style.borderColor };
+  });
+  const grayText = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'GrayText';
+    document.body.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  expect(disabledUnselectedColors.color).toBe(grayText);
+  expect(disabledUnselectedColors.borderColor).toBe(grayText);
+  await expect(speed60).toBeEnabled();
+
+  healthy();
+});
+
 for (const viewport of [
   { width: 320, height: 568 },
   { width: 375, height: 667 },
