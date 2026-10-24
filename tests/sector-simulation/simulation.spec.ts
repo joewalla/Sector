@@ -548,6 +548,52 @@ test.describe('saved practice settings', () => {
     await harness.healthy();
   });
 
+  test('a remounted preview waits for a held save and cannot restore settings after they are forgotten', async ({ page }) => {
+    const storage = await practiceStorageHarness(page, { seed, hold: 'write' });
+    const demo = await openDemo(page);
+
+    // Updating an opted-in setting starts a real queued AsyncStorage write.
+    await page.getByTestId('simulated-stop-duration-60').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText('Updating saved settings…');
+    await expect.poll(async () => (await storage.snapshot()).calls.write).toBe(1);
+
+    // A new response changes RouteSimulation's key and unmounts its provider
+    // while the prior provider's write is still unresolved.
+    demo.replace(240);
+    await page.getByTestId('london-demo').click();
+    await expect(page.getByTestId('practice-settings-loading')).toBeVisible();
+    expect(await storage.snapshot()).toMatchObject({
+      raw: seed,
+      calls: { write: 1, read: 1, remove: 0 },
+    });
+
+    await storage.release();
+    await expect(page.getByTestId('practice-settings-loading')).toHaveCount(0);
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(
+      'Saved settings restored. Changes will be remembered on this device.',
+    );
+    await expect(page.getByTestId('simulation-start')).toBeVisible();
+    await expect(page.getByTestId('sector-state-4')).toHaveText('ESTIMATE');
+    await expect(page.getByTestId('simulated-stop-config')).toContainText('+60s in S2');
+    await expectStored(storage, { ...saved, stops: [{ sectorId: 2, durationSeconds: 60 }] });
+
+    // Forget on the new provider, then remount once more: neither the old save
+    // completion nor the old provider's status may resurrect the forgotten data.
+    await page.getByTestId('practice-settings-forget').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(forgotMessage);
+    await defaults(page);
+    expect((await storage.snapshot()).raw).toBeNull();
+    demo.replace(300);
+    await page.getByTestId('london-demo').click();
+    await expect(page.getByTestId('simulation-start')).toBeVisible();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(
+      'Not saved. Remembering is optional.',
+    );
+    await defaults(page);
+    expect((await storage.snapshot()).raw).toBeNull();
+    demo.assertHealthy();
+  });
+
   for (const shouldFail of [false, true]) {
     test(`held first save reports ${shouldFail ? 'failure' : 'success'} and unlocks settings after settlement`, async ({ page }) => {
       const storage = await practiceStorageHarness(page, { hold: 'write' });
