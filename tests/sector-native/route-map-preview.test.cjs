@@ -145,3 +145,79 @@ test('valid coordinate limits and zero-span axes keep the viewport finite', () =
     [{ latitude: 0, longitude: 0 }, { latitude: 1, longitude: 0 }],
   ]) assertValid(RouteMapPreview({ ...props, route: { ...route, geometry } }), geometry);
 });
+
+test('three nearby synthetic stops keep every configuration number and exact square anchor', () => {
+  const stops = [
+    { number: 12, position: { latitude: 51.51, longitude: -0.1 } },
+    { number: 2, position: { latitude: 51.51001, longitude: -0.10001 } },
+    { number: 8, position: { latitude: 51.50999, longitude: -0.09999 } },
+  ];
+  const result = RouteMapPreview({ ...props, destinationName: 'Real destination', practiceStops: stops });
+  const nodes = elements(result);
+  const markers = nodes.filter((node) => node.type === 'Marker');
+  const anchors = markers.filter((node) => node.key?.startsWith('synthetic-anchor-'));
+  const labels = markers.filter((node) => node.key?.startsWith('synthetic-label-'));
+
+  assert.equal(anchors.length, 3);
+  assert.equal(labels.length, 1);
+  anchors.forEach((marker, index) => assert.equal(marker.props.coordinate, stops[index].position));
+  assert.ok(anchors.every((marker) => marker.props.anchor.x === 0.5 && marker.props.anchor.y === 0.5));
+  assert.equal(JSON.stringify(labels[0].props.coordinate), JSON.stringify({
+    latitude: stops.reduce((sum, stop) => sum + stop.position.latitude, 0) / stops.length,
+    longitude: stops.reduce((sum, stop) => sum + stop.position.longitude, 0) / stops.length,
+  }));
+  assert.equal(labels[0].props.title, 'Synthetic practice stops 2, 8, 12');
+  assert.match(labels[0].props.description, /Not real roadside stops\. No GPS tracking\./);
+
+  const badge = labels[0].props.children;
+  const badgeStyle = badge.props.style[0];
+  const labelText = badge.props.children;
+  assert.equal(badgeStyle.borderStyle, 'dashed');
+  assert.equal(labelText.props.children, 'SIM 2, 8, 12');
+  assert.equal(labelText.props.style[0].fontSize, 11);
+  assert.equal(labelText.props.style[0].fontWeight, '700');
+
+  assert.ok(markers.some((marker) => marker.props.title === 'Real destination'));
+  assert.ok(anchors.every((marker) => marker.props.title.startsWith('Synthetic practice stop ')));
+  const note = nodes.find((node) => node.type === 'Text' && node.props.children?.toString().includes('Dashed SIM badges'));
+  assert.match(note.props.children, /Nearby labels grouped/);
+  assert.match(note.props.children, /Not roadside stops or GPS tracking/);
+});
+
+test('separated synthetic stops keep separate labels, and map zoom does not control their grouping', () => {
+  const stops = [
+    { number: 3, position: points[0] },
+    { number: 1, position: points[2] },
+  ];
+  const result = RouteMapPreview({ ...props, practiceStops: stops });
+  const nodes = elements(result);
+  const map = nodes.find((node) => node.type === 'MapView');
+  const labels = nodes.filter((node) => node.type === 'Marker' && node.key?.startsWith('synthetic-label-'));
+  const anchors = nodes.filter((node) => node.type === 'Marker' && node.key?.startsWith('synthetic-anchor-'));
+
+  assert.ok(map.props.initialRegion);
+  assert.equal(map.props.region, undefined);
+  assert.equal(map.props.onRegionChange, undefined);
+  assert.equal(map.props.onRegionChangeComplete, undefined);
+  assert.deepEqual(labels.map((marker) => marker.props.title), [
+    'Synthetic practice stop 3',
+    'Synthetic practice stop 1',
+  ]);
+  anchors.forEach((marker, index) => assert.equal(marker.props.coordinate, stops[index].position));
+  assert.ok(anchors.every((marker) => marker.props.anchor.x === 0.5 && marker.props.anchor.y === 0.5));
+});
+
+test('replay position can pass a synthetic stop without moving its square anchor', () => {
+  const stop = { number: 4, position: points[1] };
+  const result = RouteMapPreview({ ...props, position: stop.position, practiceStops: [stop] });
+  const markers = elements(result).filter((node) => node.type === 'Marker');
+  const positionMarker = markers.find((marker) => marker.props.title === 'Simulated position');
+  const stopAnchor = markers.find((marker) => marker.key === 'synthetic-anchor-4');
+  const stopLabel = markers.find((marker) => marker.key === 'synthetic-label-4');
+
+  assert.equal(JSON.stringify(positionMarker.props.coordinate), JSON.stringify(stop.position));
+  assert.equal(stopAnchor.props.coordinate, stop.position);
+  assert.equal(stopAnchor.props.title, 'Synthetic practice stop 4');
+  assert.equal(stopLabel.props.title, 'Synthetic practice stop 4');
+  assert.match(stopLabel.props.description, /Not real roadside stops\. No GPS tracking\./);
+});

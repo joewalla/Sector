@@ -18,6 +18,12 @@ These are render-output contract checks, not a mounted React lifecycle test
 or physical iOS/Android SDK verification. Device map mounting, gestures and
 native camera behavior are not established by this suite.
 
+Synthetic-stop checks also cover three nearby configuration numbers, separated
+labels, exact square-anchor coordinates, dashed badge styling and text size,
+callout distinctions, fixed initial-viewport grouping, and replay positions
+coincident with stop anchors. These checks do not establish physical marker
+readability during pinch/pan gestures or replay playback.
+
 The practice text-scaling source guard checks that the simulation, sector
 configuration, stop configuration and split screens do not disable native
 React Native text scaling or clamp text with `numberOfLines`. It does not
