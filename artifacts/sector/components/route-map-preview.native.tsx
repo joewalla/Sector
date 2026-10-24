@@ -42,6 +42,9 @@ export default function RouteMapPreview({
     longitudeDelta: Math.max((maxLongitude - minLongitude) * 1.5, 0.015),
     latitudeDelta: Math.max((maxLatitude - minLatitude) * 1.5, 0.015),
   };
+  // Remount only when the route itself changes. Position and overlay updates
+  // must not reset a user's map camera during a replay.
+  const geometryKey = JSON.stringify(route.geometry.map(({ latitude, longitude }) => [latitude, longitude]));
   // Group against the initial viewport; labels remain grouped while zooming.
   // Separate square anchors always retain each exact synthetic route position.
   const stopGroups = clusterPracticeStops((practiceStops ?? []).map((stop) => ({
@@ -53,7 +56,7 @@ export default function RouteMapPreview({
   return (
     <View>
     <MapView
-      key={`${destinationName}-${route.durationSeconds}`}
+      key={`${destinationName}-${route.durationSeconds}-${geometryKey}`}
       style={{ height: 250, borderRadius: 16, overflow: 'hidden' }}
       initialRegion={initialRegion}
       accessibilityLabel="Map showing the route preview"

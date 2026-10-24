@@ -60,7 +60,7 @@ function assertUnavailable(result) {
   assert.equal(elements(result).some((node) => ['MapView', 'Marker', 'Polyline'].includes(node.type)), false);
 }
 
-function assertValid(result, expectedPoints = points) {
+function assertValid(result, expectedPoints = points, overlayProps = props) {
   const nodes = elements(result);
   const map = nodes.find((node) => node.type === 'MapView');
   assert.ok(map, 'native map must recover');
@@ -73,10 +73,10 @@ function assertValid(result, expectedPoints = points) {
   assert.equal(markers.length, 7, 'start, end, boundary, position, two anchors and grouped label');
   assert.equal(markers[0].props.coordinate, expectedPoints[0]);
   assert.equal(markers[1].props.coordinate, expectedPoints.at(-1));
-  assert.equal(markers[2].props.coordinate.latitude, props.sectorBoundaries[0].position.latitude);
-  assert.equal(markers[3].props.coordinate.longitude, props.position.longitude);
-  assert.equal(markers[4].props.coordinate, props.practiceStops[0].position);
-  assert.equal(markers[5].props.coordinate, props.practiceStops[1].position);
+  assert.equal(markers[2].props.coordinate.latitude, overlayProps.sectorBoundaries[0].position.latitude);
+  assert.equal(markers[3].props.coordinate.longitude, overlayProps.position.longitude);
+  assert.equal(markers[4].props.coordinate, overlayProps.practiceStops[0].position);
+  assert.equal(markers[5].props.coordinate, overlayProps.practiceStops[1].position);
   assert.equal(markers[6].props.title, 'Synthetic practice stops 1, 2');
 }
 
@@ -129,6 +129,44 @@ test('missing geometry shows fallback, then a different valid shape recovers', (
   assertUnavailable(RouteMapPreview({ ...props, route: missingGeometry }));
   const recovered = points.map((point) => ({ latitude: point.latitude + 1, longitude: point.longitude + 1 }));
   assertValid(RouteMapPreview({ ...props, route: { ...route, geometry: recovered } }), recovered);
+});
+
+test('different valid routes with the same destination and duration refit without resetting on replay movement', () => {
+  const alternatePoints = points.map((point) => ({ latitude: point.latitude + 12, longitude: point.longitude + 20 }));
+  const alternateRoute = { ...route, geometry: alternatePoints };
+  const alternateOverlays = {
+    position: alternatePoints[1],
+    sectorBoundaries: [{ id: 1, position: alternatePoints[1] }],
+    practiceStops: [{ number: 1, position: alternatePoints[1] }, { number: 2, position: alternatePoints[1] }],
+  };
+  const first = RouteMapPreview(props);
+  const alternate = RouteMapPreview({ ...props, route: alternateRoute, ...alternateOverlays });
+  const firstMap = elements(first).find((node) => node.type === 'MapView');
+  const alternateNodes = elements(alternate);
+  const alternateMap = alternateNodes.find((node) => node.type === 'MapView');
+
+  assert.equal(route.durationSeconds, alternateRoute.durationSeconds);
+  assert.equal(props.destinationName, 'Synthetic destination');
+  assert.notEqual(firstMap.key, alternateMap.key, 'changed geometry must remount and reapply initialRegion');
+  assert.notDeepEqual(firstMap.props.initialRegion, alternateMap.props.initialRegion);
+  assertValid(alternate, alternatePoints, alternateOverlays);
+  const alternateMarkers = alternateNodes.filter((node) => node.type === 'Marker');
+  assert.equal(alternateMarkers.length, 7, 'all start, end, sector, replay, and synthetic-stop overlays remain present');
+  assert.equal(JSON.stringify(alternateMarkers[2].props.coordinate), JSON.stringify(alternateOverlays.sectorBoundaries[0].position));
+  assert.equal(JSON.stringify(alternateMarkers[3].props.coordinate), JSON.stringify(alternateOverlays.position));
+  assert.equal(JSON.stringify(alternateMarkers[4].props.coordinate), JSON.stringify(alternateOverlays.practiceStops[0].position));
+  assert.equal(JSON.stringify(alternateMarkers[5].props.coordinate), JSON.stringify(alternateOverlays.practiceStops[1].position));
+
+  const movedPosition = { latitude: alternatePoints[1].latitude + 0.001, longitude: alternatePoints[1].longitude + 0.001 };
+  const moved = RouteMapPreview({ ...props, route: alternateRoute, ...alternateOverlays, position: movedPosition });
+  const movedNodes = elements(moved);
+  const movedMap = movedNodes.find((node) => node.type === 'MapView');
+  assert.equal(movedMap.key, alternateMap.key, 'simulated position updates must not remount the map');
+  assert.equal(movedNodes.filter((node) => node.type === 'Marker').length, 7);
+  assert.equal(
+    JSON.stringify(movedNodes.find((node) => node.type === 'Marker' && node.props.title === 'Simulated position').props.coordinate),
+    JSON.stringify(movedPosition),
+  );
 });
 
 test('minimal valid shape renders only original endpoints without optional overlays', () => {
