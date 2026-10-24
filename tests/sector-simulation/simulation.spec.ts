@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { failedRouteFixture, londonFixture, placesFixture, unavailableRouteFixture, unusableRouteFixtures } from './fixtures';
+import { failedRouteFixture, londonFixture, malformedRouteEnvelopeFixtures, placesFixture, unavailableRouteFixture, unusableRouteFixtures } from './fixtures';
 import { practiceStorageHarness } from './practice-settings-harness';
 
 const corsHeaders = {
@@ -43,14 +43,17 @@ async function recoveryHarness(page: Page) {
       await expect.poll(() => pending.length).toBeGreaterThan(0);
       return pending.shift()!;
     },
-    async reply(route: Route, json: unknown, status = 200) {
+    async respond(route: Route, response: { json?: unknown; body?: string; contentType?: string }, status = 200) {
       const completed = page.waitForResponse((response) => response.request() === route.request());
-      await route.fulfill({ status, headers: corsHeaders, json });
+      await route.fulfill({ status, headers: corsHeaders, ...response });
       await (await completed).finished();
       // Let response handlers and React commit before asserting absence of stale UI.
       await page.evaluate(() => new Promise<void>((resolve) => {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       }));
+    },
+    async reply(route: Route, json: unknown, status = 200) {
+      await this.respond(route, { json }, status);
     },
     async healthy() {
       expect(errors).toEqual([]);
@@ -118,17 +121,86 @@ test.describe('route failure recovery', () => {
   for (const fixture of unusableRouteFixtures()) {
     test(`${fixture.name} cannot fabricate a simulation and a fresh route recovers`, async ({ page }) => {
       const harness = await recoveryHarness(page);
+      const saved = await saveSearch(page);
       await page.getByTestId('london-demo').click();
       await harness.reply(await harness.take(), fixture.response);
-      await expect(page.getByRole('alert')).toHaveText('Simulation unavailable');
+      await expect(page.getByRole('alert')).toContainText('London demo route could not be loaded');
       await expectNoReplay(page);
+      await expect(page.getByText('traffic-aware estimate', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('PREVIEW INSTRUCTIONS', { exact: true })).toHaveCount(0);
+      await expect(page.getByTestId('destination-name')).toHaveValue('Fixture Museum');
+      expect(await page.evaluate(() => localStorage.getItem('sector.recent-searches.v1'))).toBe(saved);
       await expect(page.getByTestId('london-demo')).toBeEnabled();
-      await page.getByTestId('london-demo').click();
+      await page.getByRole('button', { name: 'Retry', exact: true }).click();
       await harness.reply(await harness.take(), londonFixture());
       await expect(page.getByRole('alert')).toHaveCount(0);
       await expect(page.getByTestId('simulation-start')).toBeVisible();
       await harness.healthy();
     });
+  }
+
+  for (const fixture of malformedRouteEnvelopeFixtures()) {
+    for (const selected of [false, true]) {
+      test(`${selected ? 'selected route' : 'demo'} rejects ${fixture.name} and recovers without losing saved searches`, async ({ page }) => {
+        const harness = await recoveryHarness(page);
+        const saved = await saveSearch(page);
+        if (selected) {
+          // Explicit synthetic location, never a device or browser GPS request.
+          await page.evaluate(() => {
+            Object.defineProperty(navigator, 'geolocation', {
+              configurable: true,
+              value: { getCurrentPosition(success: (position: unknown) => void) {
+                success({ coords: { longitude: -0.12, latitude: 51.5 } });
+              } },
+            });
+          });
+          await page.getByRole('button', { name: /Search places/ }).click();
+          await page.getByRole('button', { name: /Fixture Museum Synthetic Museum Road/ }).click();
+        }
+        const action = selected
+          ? page.getByRole('button', { name: /Preview route/ })
+          : page.getByTestId('london-demo');
+        // First render a valid route so a later invalid response cannot retain stale data.
+        await action.click();
+        await harness.reply(await harness.take(), londonFixture(240));
+        await expect(page.getByTestId('simulation-start')).toBeVisible();
+        await action.click();
+        await harness.respond(await harness.take(), fixture.response);
+        await expect(page.getByRole('alert')).toContainText(selected
+          ? 'Route preview is unavailable right now. No journey has been started or recorded.'
+          : 'London demo route could not be loaded');
+        await expect(action).toBeEnabled();
+        await expectNoReplay(page);
+        await expect(page.getByText('traffic-aware estimate', { exact: true })).toHaveCount(0);
+        await expect(page.getByText('PREVIEW INSTRUCTIONS', { exact: true })).toHaveCount(0);
+        await expect(page.getByText(/Fixture: depart Westminster/, { exact: true })).toHaveCount(0);
+        await expect(page.getByTestId('destination-name')).toHaveValue('Fixture Museum');
+        expect(await page.evaluate(() => localStorage.getItem('sector.recent-searches.v1'))).toBe(saved);
+        if (selected) await expect(page.getByText('One-time location use', { exact: true })).toBeVisible();
+        await (selected ? action : page.getByRole('button', { name: 'Retry', exact: true })).click();
+        await harness.reply(await harness.take(), londonFixture());
+        await expect(page.getByRole('alert')).toHaveCount(0);
+        await expect(page.getByTestId('simulation-start')).toBeVisible();
+        await expect(page.getByText('3 min', { exact: true })).toBeVisible();
+        await expect(page.getByText('0.6 mi', { exact: true })).toBeVisible();
+        await expect(page.getByText('PREVIEW INSTRUCTIONS', { exact: true })).toBeVisible();
+        await expect(page.getByText('Fixture: depart Westminster', { exact: true })).toBeVisible();
+        await expect(page.getByTestId('simulation-selected-time')).toContainText('0:00 / 3:00');
+        await page.getByTestId('simulation-start').click();
+        await expect(page.getByTestId('simulation-playback-state')).toContainText('SIMULATING');
+        await expect(page.getByTestId('destination-name')).toHaveValue('Fixture Museum');
+        expect(await page.evaluate(() => localStorage.getItem('sector.recent-searches.v1'))).toBe(saved);
+        expect(harness.bodies).toHaveLength(3);
+        for (const body of harness.bodies) expect(body).toEqual(selected ? {
+          origin: { longitude: -0.12, latitude: 51.5 },
+          destination: { longitude: -0.1, latitude: 51.51 },
+        } : {
+          origin: { longitude: -0.1276, latitude: 51.5007 },
+          destination: { longitude: -0.0754, latitude: 51.5081 },
+        });
+        await harness.healthy();
+      });
+    }
   }
 
   for (const staleStatus of [200, 503]) {

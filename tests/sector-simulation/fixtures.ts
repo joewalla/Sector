@@ -39,6 +39,51 @@ export function unusableRouteFixtures() {
   ];
 }
 
+/** Invalid successful responses: no fallback steps, metrics, or replacement route. */
+export function malformedRouteEnvelopeFixtures() {
+  const route = londonFixture();
+  const { steps: _steps, ...withoutSteps } = route;
+  const { distanceMeters: _distance, ...withoutDistance } = route;
+  const { durationSeconds: _duration, ...withoutDuration } = route;
+  const json = (name: string, response: unknown) => ({
+    name, response: { json: response },
+  });
+  return [
+    json('missing steps', withoutSteps),
+    json('null steps', { ...route, steps: null }),
+    json('empty steps', { ...route, steps: [] }),
+    json('zero-weight steps', { ...route, steps: route.steps.map((step) => ({
+      ...step, distanceMeters: 0, durationSeconds: 0,
+    })) }),
+    json('arrival-only steps', { ...route, steps: [route.steps[3]] }),
+    json('blank instruction', { ...route, steps: [{ ...route.steps[0], instruction: '  ' }] }),
+    json('non-array steps', { ...route, steps: {} }),
+    json('null instruction step', { ...route, steps: [null] }),
+    json('non-text instruction', { ...route, steps: [{ ...route.steps[0], instruction: {} }] }),
+    json('missing step duration', { ...route, steps: [{ instruction: 'Incomplete instruction' }] }),
+    json('missing distance', withoutDistance),
+    json('missing duration', withoutDuration),
+    json('null metrics', { ...route, distanceMeters: null, durationSeconds: null }),
+    json('string metrics', { ...route, distanceMeters: '900', durationSeconds: '180' }),
+    json('negative duration', { ...route, durationSeconds: -1 }),
+    json('null envelope', null),
+    json('empty envelope', {}),
+    json('array envelope', [route]),
+    {
+      name: 'HTML success',
+      response: { contentType: 'text/html', body: '<html><body>Upstream unavailable</body></html>' },
+    },
+    {
+      name: 'invalid JSON success',
+      response: { contentType: 'application/json', body: '{"steps":' },
+    },
+    {
+      name: 'empty JSON success',
+      response: { contentType: 'application/json', body: '' },
+    },
+  ];
+}
+
 export function placesFixture() {
   return {
     attribution: 'Synthetic browser search fixture · not live Mapbox data',

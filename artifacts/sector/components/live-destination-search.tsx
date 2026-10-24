@@ -26,6 +26,7 @@ import { BackHeader, Eyebrow, InfoPanel, ScreenShell } from '@/components/sector
 import RouteMapPreview from './route-map-preview';
 import RouteSimulation from './route-simulation';
 import { saveRecentSearch } from '@/recent-searches';
+import { parseRoutePreview } from '@/route-preview';
 
 type Coordinate = { longitude: number; latitude: number };
 type Destination = PlaceSearchResponse['results'][number];
@@ -98,8 +99,9 @@ export default function LiveDestinationSearch() {
         data: { origin: DEMO_ORIGIN, destination: DEMO_DESTINATION },
       });
       if (request !== requestVersion.current) return;
+      const validatedRoute = parseRoutePreview(response);
       setRouteVersion((v) => v + 1);
-      setDemoRoute(response);
+      setDemoRoute(validatedRoute);
     } catch {
       if (request !== requestVersion.current) return;
       setDemoError('The London demo route could not be loaded from Mapbox. Check your connection and try again.');
@@ -138,6 +140,7 @@ export default function LiveDestinationSearch() {
     const request = requestVersion.current;
     setError('');
     setNeedsSettings(false);
+    setRoute(null);
     try {
       const origin = await getCurrentPosition();
       if (request !== requestVersion.current) return;
@@ -148,8 +151,9 @@ export default function LiveDestinationSearch() {
         },
       });
       if (request !== requestVersion.current) return;
+      const validatedRoute = parseRoutePreview(response);
       setRouteVersion((v) => v + 1);
-      setRoute(response);
+      setRoute(validatedRoute);
     } catch (caught) {
       if (request !== requestVersion.current) return;
       const reason = caught instanceof Error ? caught.message : '';

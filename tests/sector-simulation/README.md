@@ -51,6 +51,14 @@ Coverage:
   search resubmission, and selected-route failure/retry with a synthetic position.
 - API failures preserve exact device-stored search strings saved through the UI;
   failed or unusable responses never expose playback controls or a completed run.
+- Incomplete successful route responses (missing/null/empty steps, steps without
+  movement, blank instructions, missing metrics, malformed
+  instruction entries, wrong envelope types, HTML, invalid JSON and empty bodies)
+  are rejected before metrics, maps or instructions render. Both demo and selected
+  destination flows replace an existing preview with a recoverable error, preserve
+  destination text and saved-search bytes, then recover on a valid retry with the
+  fixture's actual metrics, instructions and playable timeline. Selected routes
+  use only a fixed synthetic position, never real GPS.
 
 Run just the failure/recovery flows:
 
