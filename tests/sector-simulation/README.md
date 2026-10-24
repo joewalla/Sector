@@ -12,10 +12,11 @@ Playwright. The workspace's preinstalled Chromium is detected automatically.
 For another preinstalled binary, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to
 its executable path; elsewhere, the normal Playwright-managed browser is used.
 
-The tests intercept only the route-preview endpoint with explicitly synthetic
+The tests intercept the route-preview and place-search endpoints with explicitly synthetic
 fixtures. They drive the real React UI, timers and navigation state, but do not
 validate Mapbox availability, real road geometry, real GPS, native navigation,
-or iPhone behaviour. GPS access fails the test. Playback uses Playwright's
+or iPhone behaviour. Unexpected GPS access fails the recovery tests; the selected-route
+retry test supplies a fixed synthetic location instead of accessing GPS. Playback uses Playwright's
 controlled clock; hidden/focus lifecycle events are dispatched explicitly so
 headless tab visibility does not decide the outcome.
 
@@ -30,6 +31,18 @@ Coverage:
 - No extra route request on replay or configuration change.
 - Arbitrary forward/backward inspection, exact sector-boundary jumps, keyboard scrubbing and pause-on-seek.
 - Inspection-only runs never create a baseline; previous full replays and synthetic-stop timing stay intact.
+- Route recovery: service/provider/network failures, loading/error reset, retry success,
+  malformed/empty/degenerate geometry and unusable distance, late demo success/failure
+  after search/selection or clear, newer-before-older demo completion, failed place
+  search resubmission, and selected-route failure/retry with a synthetic position.
+- API failures preserve exact device-stored search strings saved through the UI;
+  failed or unusable responses never expose playback controls or a completed run.
+
+Run just the failure/recovery flows:
+
+```sh
+pnpm test:sector:browser --grep 'route failure recovery'
+```
 
 Reports, traces and screenshots are written beneath the ignored
 `generated-artifacts/sector-browser/` directory. Test fixtures are never

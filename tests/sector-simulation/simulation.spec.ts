@@ -1,12 +1,260 @@
-import { test, expect, type Page } from '@playwright/test';
-import { londonFixture } from './fixtures';
+import { test, expect, type Page, type Route } from '@playwright/test';
+import { failedRouteFixture, londonFixture, placesFixture, unavailableRouteFixture, unusableRouteFixtures } from './fixtures';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+// Explicitly held requests make ordering deterministic, without sleeps or real services.
+async function recoveryHarness(page: Page) {
+  const pending: Route[] = [];
+  const bodies: unknown[] = [];
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/api/route/preview', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: corsHeaders });
+      return;
+    }
+    bodies.push(route.request().postDataJSON());
+    pending.push(route);
+  });
+  let searchFailure = false;
+  await page.route('**/api/places/search', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({ status: 204, headers: corsHeaders });
+      return;
+    }
+    expect(route.request().postDataJSON()).toEqual({ query: 'Fixture Museum' });
+    await route.fulfill({
+      status: searchFailure ? 503 : 200,
+      headers: corsHeaders,
+      json: searchFailure ? unavailableRouteFixture : placesFixture(),
+    });
+  });
+  await page.goto('/search');
+  return {
+    bodies,
+    failSearch: (fail: boolean) => { searchFailure = fail; },
+    async take() {
+      await expect.poll(() => pending.length).toBeGreaterThan(0);
+      return pending.shift()!;
+    },
+    async reply(route: Route, json: unknown, status = 200) {
+      const completed = page.waitForResponse((response) => response.request() === route.request());
+      await route.fulfill({ status, headers: corsHeaders, json });
+      await (await completed).finished();
+      // Let response handlers and React commit before asserting absence of stale UI.
+      await page.evaluate(() => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }));
+    },
+    async healthy() {
+      expect(errors).toEqual([]);
+      expect(await page.evaluate(() => (globalThis as typeof globalThis & { fixtureGpsCalls?: number }).fixtureGpsCalls ?? 0)).toBe(0);
+    },
+  };
+}
+
+async function expectNoReplay(page: Page) {
+  await expect(page.getByTestId('simulation-start')).toHaveCount(0);
+  await expect(page.getByTestId('simulation-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('simulation-result-state')).toHaveCount(0);
+}
+
+test.describe('route failure recovery', () => {
+  // Saved through the UI, not fabricated history. API errors must preserve exact bytes.
+  async function saveSearch(page: Page) {
+    await page.getByTestId('destination-name').fill('Fixture Museum');
+    await page.getByRole('button', { name: /Save this search on this device/ }).click();
+    await expect(page.getByText('Search saved on this device', { exact: true })).toBeVisible();
+    const stored = await page.evaluate(() => localStorage.getItem('sector.recent-searches.v1'));
+    expect(JSON.parse(stored!)[0].query).toBe('Fixture Museum');
+    return stored;
+  }
+
+  for (const failure of [
+    { name: 'unavailable', status: 503, json: unavailableRouteFixture },
+    { name: 'provider failure', status: 502, json: failedRouteFixture },
+    { name: 'connection failure', status: 0, json: null },
+  ]) {
+    test(`demo ${failure.name} clears loading, preserves saved searches and retries successfully`, async ({ page }) => {
+      const harness = await recoveryHarness(page);
+      const saved = await saveSearch(page);
+      await page.getByTestId('london-demo').click();
+      const request = await harness.take();
+      await expect(page.getByTestId('london-demo')).toBeDisabled();
+      await expectNoReplay(page);
+      if (failure.status) await harness.reply(request, failure.json, failure.status);
+      else await request.abort('failed');
+      await expect(page.getByRole('alert')).toContainText('London demo route could not be loaded');
+      await expect(page.getByTestId('london-demo')).toBeEnabled();
+      await expectNoReplay(page);
+      expect(await page.evaluate(() => localStorage.getItem('sector.recent-searches.v1'))).toBe(saved);
+      await expect(page.getByTestId('destination-name')).toHaveValue('Fixture Museum');
+      await page.getByRole('button', { name: 'Retry', exact: true }).click();
+      const retry = await harness.take();
+      await expect(page.getByRole('alert')).toHaveCount(0);
+      await expect(page.getByTestId('london-demo')).toBeDisabled();
+      await harness.reply(retry, londonFixture());
+      await expect(page.getByTestId('simulation-start')).toBeVisible();
+      await expect(page.getByTestId('london-demo')).toBeEnabled();
+      expect(harness.bodies).toHaveLength(2);
+      for (const body of harness.bodies) expect(body).toEqual({
+        origin: { longitude: -0.1276, latitude: 51.5007 },
+        destination: { longitude: -0.0754, latitude: 51.5081 },
+      });
+      await page.getByTestId('simulation-start').click();
+      await expect(page.getByTestId('simulation-toggle')).toBeVisible();
+      await expect(page.getByTestId('simulation-playback-state')).toContainText('SIMULATING');
+      expect(await page.evaluate(() => localStorage.getItem('sector.recent-searches.v1'))).toBe(saved);
+      await harness.healthy();
+    });
+  }
+
+  for (const fixture of unusableRouteFixtures()) {
+    test(`${fixture.name} cannot fabricate a simulation and a fresh route recovers`, async ({ page }) => {
+      const harness = await recoveryHarness(page);
+      await page.getByTestId('london-demo').click();
+      await harness.reply(await harness.take(), fixture.response);
+      await expect(page.getByRole('alert')).toHaveText('Simulation unavailable');
+      await expectNoReplay(page);
+      await expect(page.getByTestId('london-demo')).toBeEnabled();
+      await page.getByTestId('london-demo').click();
+      await harness.reply(await harness.take(), londonFixture());
+      await expect(page.getByRole('alert')).toHaveCount(0);
+      await expect(page.getByTestId('simulation-start')).toBeVisible();
+      await harness.healthy();
+    });
+  }
+
+  for (const staleStatus of [200, 503]) {
+    test(`late demo ${staleStatus} cannot replace a newer search and selection`, async ({ page }) => {
+      const harness = await recoveryHarness(page);
+      await page.getByTestId('london-demo').click();
+      const stale = await harness.take();
+      await page.getByTestId('destination-name').fill('Fixture Museum');
+      await page.getByRole('button', { name: /Search places/ }).click();
+      await page.getByRole('button', { name: /Fixture Museum Synthetic Museum Road/ }).click();
+      await expect(page.getByRole('button', { name: /Preview route/ })).toBeEnabled();
+      await harness.reply(stale, staleStatus === 200 ? londonFixture(999) : unavailableRouteFixture, staleStatus);
+      await expect(page.getByTestId('destination-name')).toHaveValue('Fixture Museum');
+      // RN Web does not emit aria-selected on role=button. The preview action
+      // and location notice exist only while a destination remains selected.
+      await expect(page.getByRole('button', { name: /Preview route/ })).toBeEnabled();
+      await expect(page.getByText('One-time location use', { exact: true })).toBeVisible();
+      await expect(page.getByTestId('london-demo')).toBeEnabled();
+      await expect(page.getByRole('alert')).toHaveCount(0);
+      await expectNoReplay(page);
+      await expect(page.getByText('LONDON DEMO ROUTE · WESTMINSTER TO TOWER OF LONDON', { exact: true })).toHaveCount(0);
+      await harness.healthy();
+    });
+  }
+
+  test('late demo cannot undo clearing the destination', async ({ page }) => {
+    const harness = await recoveryHarness(page);
+    await page.getByTestId('destination-name').fill('Fixture Museum');
+    await page.getByTestId('london-demo').click();
+    const stale = await harness.take();
+    await page.getByRole('button', { name: 'Clear destination', exact: true }).click();
+    await harness.reply(stale, londonFixture());
+    await expect(page.getByTestId('destination-name')).toHaveValue('');
+    await expect(page.getByTestId('london-demo')).toBeEnabled();
+    await expectNoReplay(page);
+    await harness.healthy();
+  });
+
+  test('older demo finishing last cannot overwrite the newer demo', async ({ page }) => {
+    const harness = await recoveryHarness(page);
+    await page.getByTestId('london-demo').click();
+    const older = await harness.take();
+    await page.getByTestId('destination-name').fill('Fixture Museum');
+    await page.getByTestId('london-demo').click();
+    const newer = await harness.take();
+    const latest = londonFixture(360);
+    latest.steps[0].instruction = 'Fixture: newest response wins';
+    await harness.reply(newer, latest);
+    await expect(page.getByText('Fixture: newest response wins', { exact: true })).toBeVisible();
+    await harness.reply(older, londonFixture(999));
+    await expect(page.getByTestId('london-demo')).toBeEnabled();
+    await expect(page.getByText('Fixture: newest response wins', { exact: true })).toBeVisible();
+    await expect(page.getByText('6 min', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('simulation-start')).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await harness.healthy();
+  });
+
+  test('failed place search preserves saved strings and recovers on resubmission', async ({ page }) => {
+    const harness = await recoveryHarness(page);
+    const saved = await saveSearch(page);
+    harness.failSearch(true);
+    await page.getByRole('button', { name: /Search places/ }).click();
+    await expect(page.getByRole('alert')).toContainText('Place search is unavailable');
+    await expect(page.getByRole('button', { name: /Search places/ })).toBeEnabled();
+    await expectNoReplay(page);
+    expect(await page.evaluate(() => localStorage.getItem('sector.recent-searches.v1'))).toBe(saved);
+    await expect(page.getByTestId('destination-name')).toHaveValue('Fixture Museum');
+    harness.failSearch(false);
+    await page.getByRole('button', { name: /Search places/ }).click();
+    await expect(page.getByRole('button', { name: /Fixture Museum Synthetic Museum Road/ })).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('sector.recent-searches.v1'))).toBe(saved);
+    await harness.healthy();
+  });
+
+  test('selected route failure preserves saved searches and retries with a synthetic location', async ({ page }) => {
+    const harness = await recoveryHarness(page);
+    const saved = await saveSearch(page);
+    // This test alone supplies an explicit synthetic position, never real GPS.
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'geolocation', {
+        configurable: true,
+        value: {
+          getCurrentPosition(success: (position: unknown) => void) {
+            success({ coords: { longitude: -0.12, latitude: 51.5 } });
+          },
+        },
+      });
+    });
+    await page.getByRole('button', { name: /Search places/ }).click();
+    await page.getByRole('button', { name: /Fixture Museum Synthetic Museum Road/ }).click();
+    const preview = page.getByRole('button', { name: /Preview route/ });
+    await preview.click();
+    const failed = await harness.take();
+    // Pending buttons intentionally show a spinner instead of their text.
+    await expectNoReplay(page);
+    await harness.reply(failed, failedRouteFixture, 502);
+    await expect(page.getByRole('alert')).toHaveText('Route preview is unavailable right now. No journey has been started or recorded.');
+    await expect(preview).toBeEnabled();
+    await expectNoReplay(page);
+    expect(await page.evaluate(() => localStorage.getItem('sector.recent-searches.v1'))).toBe(saved);
+    await preview.click();
+    await harness.reply(await harness.take(), londonFixture());
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByTestId('simulation-start')).toBeVisible();
+    await expect(page.getByText('ROUTE PREVIEW · NOT ACTIVE NAVIGATION', { exact: true })).toBeVisible();
+    for (const body of harness.bodies) expect(body).toEqual({
+      origin: { longitude: -0.12, latitude: 51.5 },
+      destination: { longitude: -0.1, latitude: 51.51 },
+    });
+    expect(harness.bodies).toHaveLength(2);
+    expect(await page.evaluate(() => localStorage.getItem('sector.recent-searches.v1'))).toBe(saved);
+    await harness.healthy();
+  });
+});
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     // Any accidental GPS access is an immediate failure, not a real location request.
     Object.defineProperty(navigator, 'geolocation', {
       configurable: true,
-      value: { getCurrentPosition() { throw new Error('Regression: London demo must not use GPS'); } },
+      value: { getCurrentPosition() {
+        const scope = globalThis as typeof globalThis & { fixtureGpsCalls?: number };
+        scope.fixtureGpsCalls = (scope.fixtureGpsCalls ?? 0) + 1;
+        throw new Error('Regression: London demo must not use GPS');
+      } },
     });
   });
 });

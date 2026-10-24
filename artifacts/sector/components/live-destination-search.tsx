@@ -269,6 +269,8 @@ export default function LiveDestinationSearch() {
                   setDestination(null);
                   setRoute(null);
                   setError('');
+                  setSaved(false);
+                  clearDemo();
                 }}
                 hitSlop={10}
               >

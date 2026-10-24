@@ -20,3 +20,31 @@ export function londonFixture(durationSeconds = 180) {
     ],
   };
 }
+
+export const unavailableRouteFixture = { error: 'Synthetic fixture: route service unavailable' };
+export const failedRouteFixture = { error: 'Synthetic fixture: route provider failed' };
+
+/** Deliberately invalid wire payloads; do not coerce these into valid client types. */
+export function unusableRouteFixtures() {
+  const route = londonFixture();
+  return [
+    { name: 'empty geometry', response: { ...route, geometry: [] } },
+    { name: 'single point', response: { ...route, geometry: route.geometry.slice(0, 1) } },
+    { name: 'coincident points', response: { ...route, geometry: [route.geometry[0], route.geometry[0]] } },
+    { name: 'out-of-range coordinate', response: { ...route, geometry: [{ latitude: 100, longitude: 0 }, route.geometry[1]] } },
+    { name: 'missing coordinate', response: { ...route, geometry: [{ latitude: 51.5 }, route.geometry[1]] } },
+    { name: 'null geometry', response: { ...route, geometry: null } },
+    { name: 'null point', response: { ...route, geometry: [null, route.geometry[1]] } },
+    { name: 'zero distance', response: { ...route, distanceMeters: 0 } },
+  ];
+}
+
+export function placesFixture() {
+  return {
+    attribution: 'Synthetic browser search fixture · not live Mapbox data',
+    results: [
+      { id: 'fixture-museum', name: 'Fixture Museum', fullAddress: 'Synthetic Museum Road, London', featureType: 'poi', latitude: 51.51, longitude: -0.1 },
+      { id: 'fixture-library', name: 'Fixture Library', fullAddress: 'Synthetic Library Road, London', featureType: 'poi', latitude: 51.52, longitude: -0.11 },
+    ],
+  };
+}

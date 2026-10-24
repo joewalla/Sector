@@ -20,6 +20,15 @@ export default function RouteMapPreview({
   sectorBoundaries?: { id: number; position: { latitude: number; longitude: number } }[];
 }) {
   const colors = useColors();
+  if (!Array.isArray(route.geometry) || route.geometry.length < 2
+    || route.geometry.some((point) => !point || !Number.isFinite(point.latitude)
+      || !Number.isFinite(point.longitude) || Math.abs(point.latitude) > 90 || Math.abs(point.longitude) > 180)) {
+    return (
+      <Text style={[styles.note, { color: colors.mutedForeground }]}>
+        Route shape unavailable. No replacement geometry has been generated.
+      </Text>
+    );
+  }
   const longitudes = route.geometry.map((point) => point.longitude);
   const latitudes = route.geometry.map((point) => point.latitude);
   const minLongitude = Math.min(...longitudes);

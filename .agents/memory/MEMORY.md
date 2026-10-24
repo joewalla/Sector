@@ -3,3 +3,4 @@
 - [Google native dependency checks](google-native-dependencies.md) — inspect the published podspec for native SDK pins and Swift Package Manager requirements, not just README compatibility claims.
 - [Mapbox prototype scope](prototype-navigation-scope.md) — user chose browser-testable Mapbox simulation before paid Apple or Google setup.
 - [Cold Expo browser capture](expo-preview-capture.md) — a first screenshot after restart can precede screen rendering; corroborate a blank capture before treating it as a regression.
+- [React Native Web test semantics](react-native-web-test-semantics.md) — icon glyphs can enter button names; selected button state may not become aria-selected.
