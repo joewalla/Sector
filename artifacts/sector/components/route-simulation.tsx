@@ -15,6 +15,7 @@ import PracticeSectorConfig from './practice-sector-config';
 import SimulationStopConfig from './simulation-stop-config';
 import SimulationTimeSlider from './simulation-time-slider';
 import { PracticeSettingsControl, PracticeSettingsProvider, usePracticeSettings } from './practice-settings';
+import { handleRadioGroupArrowKey, radioOptionTabIndex } from './radio-group';
 
 type Status = 'idle' | 'running' | 'paused' | 'finished' | 'ended';
 const SPEEDS = [1, 20, 60, 120] as const;
@@ -488,8 +489,10 @@ function SpeedPicker({ speed, onChange }: { speed: Speed; onChange: (s: Speed) =
             key={s}
             accessibilityRole="radio"
             accessibilityLabel={`${s} times playback speed`}
-            accessibilityState={{ selected }}
+            aria-checked={selected}
+            tabIndex={radioOptionTabIndex(selected)}
             testID={`simulation-speed-${s}`}
+            onKeyDown={(event) => handleRadioGroupArrowKey(event, SPEEDS, onChange)}
             onPress={() => {
               tap();
               onChange(s);

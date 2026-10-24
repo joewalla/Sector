@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
+import { handleRadioGroupArrowKey, radioOptionTabIndex } from './radio-group';
 import {
   SIMULATED_STOP_DURATIONS,
   MAX_SIMULATED_STOPS,
@@ -38,11 +39,19 @@ export default function SimulationStopConfig({
             accessibilityLabel={kind === 'duration'
               ? `Stop ${index + 1}: ${option === 0 ? 'No simulated stop' : `${option} simulated seconds`}`
               : `Stop ${index + 1} in sector ${option}`}
-            accessibilityState={{ selected, disabled: locked }}
+            aria-checked={selected}
+            accessibilityState={{ disabled: locked }}
+            tabIndex={radioOptionTabIndex(selected, locked)}
             disabled={locked}
             onPress={() => update(index, kind === 'duration'
               ? { ...item, durationSeconds: option as SimulatedStopConfig['durationSeconds'] }
               : { ...item, sectorId: option })}
+            onKeyDown={(event) => handleRadioGroupArrowKey(event, values, (nextOption) => update(
+              index,
+              kind === 'duration'
+                ? { ...item, durationSeconds: nextOption as SimulatedStopConfig['durationSeconds'] }
+                : { ...item, sectorId: nextOption },
+            ), locked)}
             style={({ pressed }) => [
               styles.option,
               { backgroundColor: selected ? colors.primary : colors.secondary, borderColor: colors.border },

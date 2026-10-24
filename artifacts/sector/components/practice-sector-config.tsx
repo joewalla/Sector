@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { handleRadioGroupArrowKey, radioOptionTabIndex } from './radio-group';
 import {
   PRACTICE_SECTOR_COUNTS,
   type PracticeSectorCount,
@@ -44,9 +45,17 @@ export default function PracticeSectorConfig({
               testID={`practice-sector-count-${value}`}
               accessibilityRole="radio"
               accessibilityLabel={`${value} equal-distance practice sectors`}
-              accessibilityState={{ selected, disabled: locked }}
+              aria-checked={selected}
+              accessibilityState={{ disabled: locked }}
+              tabIndex={radioOptionTabIndex(selected, locked)}
               disabled={locked}
               onPress={() => onChange(value)}
+              onKeyDown={(event) => handleRadioGroupArrowKey(
+                event,
+                PRACTICE_SECTOR_COUNTS,
+                onChange,
+                locked,
+              )}
               style={({ pressed }) => [
                 styles.option,
                 {

@@ -98,10 +98,40 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     const healthy = await openLayoutFixture(page);
     await expect(page.getByRole('radiogroup', { name: 'Number of practice sectors' })).toBeVisible();
-    await keyboardNext(page, page.getByTestId('practice-sector-count-4'), page.getByRole('radio', { name: '5 equal-distance practice sectors', exact: true }));
+    const threeSectors = page.getByTestId('practice-sector-count-3');
+    const fourSectors = page.getByTestId('practice-sector-count-4');
+    const fiveSectors = page.getByRole('radio', { name: '5 equal-distance practice sectors', exact: true });
+    await expect(threeSectors).toHaveAttribute('aria-checked', 'true');
+    await expect(fourSectors).toHaveAttribute('aria-checked', 'false');
+    await expect(threeSectors).toHaveAttribute('tabindex', '0');
+    await expect(fiveSectors).toHaveAttribute('tabindex', '-1');
+    await threeSectors.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(fourSectors).toBeFocused();
+    await expect(fourSectors).toHaveAttribute('aria-checked', 'true');
+    await expect(threeSectors).toHaveAttribute('aria-checked', 'false');
+    await page.keyboard.press('ArrowRight');
+    await expect(fiveSectors).toBeFocused();
+    await expect(fiveSectors).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('ArrowLeft');
+    await expect(fourSectors).toBeFocused();
+    await expect(fourSectors).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('ArrowLeft');
+    await expect(threeSectors).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await expect(fiveSectors).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('sector-state-5')).toHaveText('ESTIMATE');
-    await page.getByRole('radio', { name: 'Stop 1: 10 simulated seconds', exact: true }).click();
+    const firstStopOff = page.getByRole('radio', { name: 'Stop 1: No simulated stop', exact: true });
+    await keyboardNext(page, fiveSectors, firstStopOff);
+    await expect(firstStopOff).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('ArrowRight');
+    const firstStopTen = page.getByRole('radio', { name: 'Stop 1: 10 simulated seconds', exact: true });
+    await expect(firstStopTen).toBeFocused();
+    await expect(firstStopTen).toHaveAttribute('aria-checked', 'true');
+    await expect(firstStopOff).toHaveAttribute('aria-checked', 'false');
+    await page.keyboard.press('Enter');
     await page.getByTestId('simulated-stop-add').click();
     await page.getByTestId('simulated-stop-add').click();
     for (const stop of [1, 2, 3]) {
@@ -109,10 +139,28 @@ for (const viewport of [
       const off = page.getByRole('radio', { name: `Stop ${stop}: No simulated stop`, exact: true });
       await readable(off);
       const ten = page.getByRole('radio', { name: `Stop ${stop}: 10 simulated seconds`, exact: true });
-      await keyboardNext(page, off, ten);
+      await expect(off).toHaveAttribute('aria-checked', 'false');
+      await off.focus();
+      await page.keyboard.press('ArrowRight');
+      await expect(ten).toBeFocused();
+      await expect(ten).toHaveAttribute('aria-checked', 'true');
       await page.keyboard.press('Enter');
       for (const seconds of [10, 30, 60, 120]) {
         await readable(page.getByRole('radio', { name: `Stop ${stop}: ${seconds} simulated seconds`, exact: true }));
+      }
+      if (stop === 1) {
+        const firstSector = page.getByRole('radio', { name: 'Stop 1 in sector 1', exact: true });
+        const lastSector = page.getByRole('radio', { name: 'Stop 1 in sector 5', exact: true });
+        await expect(firstSector).toHaveAttribute('aria-checked', 'true');
+        await expect(lastSector).toHaveAttribute('aria-checked', 'false');
+        await firstSector.focus();
+        await page.keyboard.press('ArrowLeft');
+        await expect(lastSector).toBeFocused();
+        await expect(lastSector).toHaveAttribute('aria-checked', 'true');
+        await expect(firstSector).toHaveAttribute('aria-checked', 'false');
+        await page.keyboard.press('ArrowRight');
+        await expect(firstSector).toBeFocused();
+        await expect(firstSector).toHaveAttribute('aria-checked', 'true');
       }
       // Keep the first two route instructions adjacent; an earlier synthetic
       // stop correctly becomes the next instruction instead of the long turn.
@@ -120,8 +168,19 @@ for (const viewport of [
       await readable(page.getByRole('radio', { name: `Stop ${stop} in sector 5`, exact: true }));
     }
     await noHorizontalOverflow(page);
+    const speed20 = page.getByTestId('simulation-speed-20');
+    const speed60 = page.getByTestId('simulation-speed-60');
+    await expect(speed20).toHaveAttribute('aria-checked', 'true');
+    await expect(speed60).toHaveAttribute('aria-checked', 'false');
+    await speed20.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(speed60).toBeFocused();
+    await expect(speed60).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('ArrowUp');
+    await expect(speed20).toBeFocused();
+    await expect(speed20).toHaveAttribute('aria-checked', 'true');
     await page.getByRole('radio', { name: '1 times playback speed', exact: true }).click();
-    await keyboardNext(page, page.getByTestId('simulation-speed-120'), page.getByRole('button', { name: 'Start simulation', exact: true }));
+    await keyboardNext(page, page.getByTestId('simulation-speed-1'), page.getByRole('button', { name: 'Start simulation', exact: true }));
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('simulation-instruction')).toHaveText(longInstruction);
     await expect(page.getByTestId('simulation-next-instruction')).toHaveText(`Next: ${longNext}`);
@@ -130,7 +189,7 @@ for (const viewport of [
     // Upcoming instructions must wrap too, not hide the end behind line clamping.
     expect(await page.getByTestId('simulation-next-instruction').evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
     await noHorizontalOverflow(page);
-    await keyboardNext(page, page.getByTestId('simulation-speed-120'), page.getByRole('button', { name: 'Pause', exact: true }));
+    await keyboardNext(page, page.getByTestId('simulation-speed-1'), page.getByRole('button', { name: 'Pause', exact: true }));
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('simulation-playback-state')).toHaveText('PAUSED');
     await readable(page.getByRole('button', { name: 'Resume', exact: true }));

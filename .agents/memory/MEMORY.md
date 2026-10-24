@@ -3,4 +3,4 @@
 - [Google native dependency checks](google-native-dependencies.md) — inspect the published podspec for native SDK pins and Swift Package Manager requirements, not just README compatibility claims.
 - [Navigation priority](prototype-navigation-scope.md) — live navigation is next; keep simulations separate from real journeys and personal bests.
 - [Cold Expo browser capture](expo-preview-capture.md) — a first screenshot after restart can precede screen rendering; corroborate a blank capture before treating it as a regression.
-- [React Native Web test semantics](react-native-web-test-semantics.md) — icon glyphs can enter button names; selected button state may not become aria-selected.
+- [React Native Web test semantics](react-native-web-test-semantics.md) — icon glyphs affect names; custom radio roles need explicit checked state and web-only arrow handling.
