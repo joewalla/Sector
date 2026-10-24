@@ -415,6 +415,34 @@ test.describe('saved practice settings', () => {
     }).toEqual(value);
   }
 
+  async function expectStorageOperationPending(page: Page, storage: Awaited<ReturnType<typeof practiceStorageHarness>>) {
+    await expect(page.getByTestId('practice-settings-status')).toHaveText('Updating saved settings…');
+    for (const id of [
+      'practice-sector-count-4',
+      'simulated-stop-duration-60',
+      'practice-settings-remember',
+      'practice-settings-forget',
+    ]) {
+      await expect(page.getByTestId(id)).toBeDisabled();
+      // A programmatic click verifies that disabled controls cannot start more
+      // writes, removals, or settings changes while the original call is held.
+      await page.getByTestId(id).dispatchEvent('click');
+    }
+    await expect(page.getByTestId('practice-settings-status')).toHaveText('Updating saved settings…');
+    expect(await storage.snapshot()).toMatchObject({ calls: { write: 1, remove: 0 } });
+  }
+
+  async function expectSettingsUnlocked(page: Page) {
+    for (const id of [
+      'practice-sector-count-4',
+      'simulated-stop-duration-60',
+      'practice-settings-remember',
+      'practice-settings-forget',
+    ]) {
+      await expect(page.getByTestId(id)).toBeEnabled();
+    }
+  }
+
   test('saving requires explicit opt-in; later sector and stop edits update only whitelisted settings and restore on reload', async ({ page }) => {
     const storage = await practiceStorageHarness(page);
     const demo = await openDemo(page);
@@ -519,6 +547,65 @@ test.describe('saved practice settings', () => {
     await expect(page.getByTestId('sector-state-4')).toHaveText('NOT REACHED');
     await harness.healthy();
   });
+
+  for (const shouldFail of [false, true]) {
+    test(`held first save reports ${shouldFail ? 'failure' : 'success'} and unlocks settings after settlement`, async ({ page }) => {
+      const storage = await practiceStorageHarness(page, { hold: 'write' });
+      await openDemo(page);
+      await page.getByTestId('practice-settings-remember').click();
+      await expect.poll(async () => (await storage.snapshot()).calls.write).toBe(1);
+      await expectStorageOperationPending(page, storage);
+      expect(await storage.snapshot()).toMatchObject({ raw: null, calls: { write: 1, remove: 0 } });
+
+      await storage.release(shouldFail);
+      await expect(page.getByTestId('practice-settings-status')).toHaveText(shouldFail ? saveError : savedMessage);
+      await expectSettingsUnlocked(page);
+
+      if (shouldFail) {
+        await expect(page.getByTestId('practice-settings-remember')).toHaveText('Save and remember practice settings');
+        await page.getByTestId('practice-settings-remember').click();
+        await expect(page.getByTestId('practice-settings-status')).toHaveText(savedMessage);
+      }
+      await expectStored(storage, { version: 1, sectorCount: 3, stops: [] });
+    });
+  }
+
+  for (const shouldFail of [false, true]) {
+    test(`held forget reports ${shouldFail ? 'failure' : 'success'} and unlocks settings after settlement`, async ({ page }) => {
+      const storage = await practiceStorageHarness(page, { seed, hold: 'remove' });
+      await openDemo(page);
+      await expect(page.getByTestId('practice-settings-status')).toContainText('Saved settings restored.');
+      await page.getByTestId('practice-settings-forget').click();
+      await expect.poll(async () => (await storage.snapshot()).calls.remove).toBe(1);
+      await expect(page.getByTestId('practice-settings-status')).toHaveText('Updating saved settings…');
+      for (const id of [
+        'practice-sector-count-5',
+        'simulated-stop-duration-60',
+        'practice-settings-remember',
+        'practice-settings-forget',
+      ]) {
+        await expect(page.getByTestId(id)).toBeDisabled();
+        await page.getByTestId(id).dispatchEvent('click');
+      }
+      await expect(page.getByTestId('practice-settings-status')).toHaveText('Updating saved settings…');
+      expect(await storage.snapshot()).toMatchObject({ raw: seed, calls: { write: 0, remove: 1 } });
+
+      await storage.release(shouldFail);
+      await expect(page.getByTestId('practice-settings-status')).toHaveText(
+        shouldFail ? 'Could not forget saved settings. Nothing was reset. Please try again.' : forgotMessage,
+      );
+      await expectSettingsUnlocked(page);
+      if (shouldFail) {
+        await expect(page.getByTestId('sector-state-4')).toHaveText('ESTIMATE');
+        await expect(page.getByTestId('simulated-stop-config')).toContainText('+30s in S2');
+        await expect(page.getByTestId('practice-settings-remember')).toHaveText('Save practice settings again');
+        await page.getByTestId('practice-settings-forget').click();
+        await expect(page.getByTestId('practice-settings-status')).toHaveText(forgotMessage);
+      }
+      await defaults(page);
+      expect(await storage.snapshot()).toMatchObject({ raw: null, calls: { write: 0, remove: shouldFail ? 2 : 1 } });
+    });
+  }
 
   for (const corrupt of [
     { name: 'malformed JSON', raw: '{broken' },

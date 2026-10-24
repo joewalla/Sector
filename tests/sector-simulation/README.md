@@ -24,7 +24,8 @@ Coverage:
 - Saved practice settings: explicit opt-in, whitelisted automatic updates and
   browser-reload restoration, forget/reset comparison clearing (including unchanged
   defaults), running/paused locks, a held asynchronous initial read blocking
-  playback, corrupt/unsupported/invalid saved data, read/write/removal failures,
+  playback, held writes/removals covering pending controls and success/failure
+  settlement, corrupt/unsupported/invalid saved data, read/write/removal failures,
   unsaved fallback defaults, preserved older bytes, and explicit retries.
   Run only these checks with `pnpm test:sector:browser --grep 'saved practice settings'`.
   The key-scoped browser storage harness lives only in the tests. Its delayed-read
