@@ -168,6 +168,16 @@ function RouteSimulationPlayback({
   );
   const active = status === 'running' || status === 'paused';
   const done = status === 'finished' || status === 'ended';
+  // Use the configured timeline: holds and resumed instructions are transitions too.
+  // Arrival is an endpoint instruction, not a moving segment.
+  const instructionTimes = useMemo(
+    () => model ? [...model.segments.map((segment) => segment.startSeconds), model.durationSeconds] : [],
+    [model],
+  );
+  const nextInstructionIndex = instructionTimes.findIndex((seconds) => seconds > elapsed);
+  const currentInstructionIndex = nextInstructionIndex < 0 ? instructionTimes.length - 1 : nextInstructionIndex - 1;
+  const previousInstructionTime = instructionTimes[currentInstructionIndex - 1];
+  const nextInstructionTime = instructionTimes[currentInstructionIndex + 1];
 
   if (!practice.ready) {
     return (
@@ -264,12 +274,24 @@ function RouteSimulationPlayback({
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.heading, { color: colors.foreground }]}>Inspect route time</Text>
         <Text style={[styles.body, { color: colors.mutedForeground }]}>
-          Drag to any point or select a sector boundary. Scrubbing pauses playback and excludes this run from replay comparisons. Restart for a comparable replay.
+          Drag to any point, select a sector boundary, or jump to the previous or next instruction. Inspection pauses playback and excludes this run from replay comparisons. Restart for a comparable replay.
         </Text>
         <Text testID="simulation-selected-time" style={[styles.body, { color: colors.foreground }]}>
            {clock(elapsed)} / {clock(model.durationSeconds)} · {hasStops ? 'includes synthetic delay' : 'Mapbox route time'}
         </Text>
         <SimulationTimeSlider value={elapsed} duration={model.durationSeconds} valueText={`${clock(elapsed)} of ${clock(model.durationSeconds)}`} onSeek={seek} />
+        <View style={styles.controls}>
+          <Control
+            icon="skip-back" label="Previous instruction" testID="simulation-instruction-previous"
+            disabled={practice.busy || previousInstructionTime === undefined}
+            onPress={() => seek(previousInstructionTime)}
+          />
+          <Control
+            icon="skip-forward" label="Next instruction" testID="simulation-instruction-next"
+            disabled={practice.busy || nextInstructionTime === undefined}
+            onPress={() => seek(nextInstructionTime)}
+          />
+        </View>
         <View style={styles.seekPoints}>
           {[{ label: 'Start', seconds: 0 }, ...(sectors ?? []).map((sector) => ({
             label: sector.id === sectorCount ? 'Finish' : `S${sector.id} end`,
@@ -482,6 +504,7 @@ function Control({
   primary,
   danger,
   testID,
+  disabled = false,
 }: {
   icon: keyof typeof Feather.glyphMap;
   label: string;
@@ -489,6 +512,7 @@ function Control({
   primary?: boolean;
   danger?: boolean;
   testID: string;
+  disabled?: boolean;
 }) {
   const colors = useColors();
   const fg = primary ? colors.primaryForeground : danger ? colors.destructive : colors.foreground;
@@ -497,10 +521,13 @@ function Control({
       accessibilityRole="button"
       accessibilityLabel={label}
       testID={testID}
+      disabled={disabled}
+      accessibilityState={{ disabled }}
       onPress={onPress}
       style={({ pressed }) => [
         styles.control,
         { backgroundColor: primary ? colors.primary : colors.card, borderColor: colors.border },
+        disabled && { opacity: 0.4 },
         pressed && styles.pressed,
       ]}
     >

@@ -359,6 +359,103 @@ test('scrubbing updates instructions and exact boundaries without creating a com
   demo.assertHealthy();
 });
 
+test('instruction shortcuts pause at each turn and arrival with synchronized marker and splits', async ({ page }) => {
+  const demo = await openDemo(page);
+  const previous = page.getByRole('button', { name: 'Previous instruction', exact: true });
+  const next = page.getByRole('button', { name: 'Next instruction', exact: true });
+  const instruction = page.getByTestId('simulation-instruction');
+  const marker = page.getByTestId('route-simulation').locator('svg circle').last();
+  const selectedTime = page.getByTestId('simulation-selected-time');
+  await expect(previous).toBeDisabled();
+  await next.click(); // Inspection from idle must not start a comparable replay.
+  await expect(selectedTime).toContainText('1:00 / 3:00');
+  await expect(instruction).toHaveText('Fixture: continue along test road');
+  await expect(page.getByTestId('sector-state-1')).toHaveText('COMPLETE');
+  await expect(page.getByTestId('sector-split-time-2')).toHaveText('0:00 split');
+  const turnPosition = [await marker.getAttribute('cx'), await marker.getAttribute('cy')];
+  await previous.click();
+  await expect(selectedTime).toContainText('0:00 / 3:00');
+  await expect(instruction).toHaveText('Fixture: depart Westminster');
+  await expect(previous).toBeDisabled();
+  const startPosition = [await marker.getAttribute('cx'), await marker.getAttribute('cy')];
+  expect(startPosition).not.toEqual(turnPosition);
+  await expect(page.getByTestId('sector-state-2')).toHaveText('NOT REACHED');
+  await page.getByTestId('simulation-toggle').click();
+  await page.clock.runFor(750); // 15 seconds into the first instruction at default 20x.
+  await next.click();
+  await expect(selectedTime).toContainText('1:00 / 3:00');
+  await expect(page.getByTestId('simulation-playback-state')).toHaveText('INSPECTION · PAUSED');
+  expect([await marker.getAttribute('cx'), await marker.getAttribute('cy')]).toEqual(turnPosition);
+  await expect(page.getByTestId('practice-sector-count-4')).toBeDisabled();
+  await expect(page.getByTestId('simulated-stop-duration-30')).toBeDisabled();
+  await page.clock.runFor(30_000);
+  await expect(selectedTime).toContainText('1:00 / 3:00');
+  await next.click();
+  await expect(selectedTime).toContainText('2:00 / 3:00');
+  await expect(instruction).toHaveText('Fixture: approach destination');
+  await expect(page.getByTestId('sector-state-2')).toHaveText('COMPLETE');
+  await expect(page.getByTestId('sector-split-time-3')).toHaveText('0:00 split');
+  await next.click();
+  await expect(selectedTime).toContainText('3:00 / 3:00');
+  await expect(instruction).toHaveText('Fixture: arrived');
+  await expect(next).toBeDisabled();
+  await expect(previous).toBeEnabled();
+  await expectCompleteSplits(page, '1:00');
+  const destination = page.getByTestId('route-simulation').locator('svg circle').nth(1);
+  expect([await marker.getAttribute('cx'), await marker.getAttribute('cy')])
+    .toEqual([await destination.getAttribute('cx'), await destination.getAttribute('cy')]);
+  await expect(page.getByTestId('simulation-result-state')).toHaveCount(0);
+  await previous.click();
+  await expect(selectedTime).toContainText('2:00 / 3:00');
+  await expect(instruction).toHaveText('Fixture: approach destination');
+  await next.click();
+  await page.getByTestId('simulation-toggle').click();
+  await page.clock.runFor(1_000);
+  await expect(page.getByTestId('simulation-result-state')).toHaveText('INSPECTION ONLY · NO BASELINE SAVED');
+  await finish(page, 120, 2_000, true);
+  await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+  expect(demo.requests()).toBe(1);
+  demo.assertHealthy();
+});
+
+test('instruction shortcuts follow synthetic-stop transitions and retain the completed baseline', async ({ page }) => {
+  const demo = await openDemo(page);
+  await page.getByTestId('simulated-stop-duration-30').click();
+  await page.getByTestId('simulated-stop-sector-2').click();
+  await finish(page, 120, 2_000);
+  // Shortcuts also inspect an already completed run without replacing its baseline.
+  const previous = page.getByRole('button', { name: 'Previous instruction', exact: true });
+  const next = page.getByRole('button', { name: 'Next instruction', exact: true });
+  await expect(next).toBeDisabled();
+  await previous.click();
+  await expect(page.getByTestId('simulation-selected-time')).toContainText('2:30 / 3:30');
+  await expect(page.getByTestId('simulation-instruction')).toHaveText('Fixture: approach destination');
+  await previous.click();
+  await expect(page.getByTestId('simulation-selected-time')).toContainText('2:00 / 3:30');
+  await expect(page.getByTestId('simulation-instruction')).toHaveText('Fixture: continue along test road');
+  await previous.click();
+  await expect(page.getByTestId('simulation-selected-time')).toContainText('1:30 / 3:30');
+  await expect(page.getByTestId('simulation-instruction')).toHaveText('Configured simulated stop in S2');
+  await expect(page.getByText('Synthetic stop · 30s left', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('sector-split-time-2')).toHaveText('0:30 split');
+  const marker = page.getByTestId('route-simulation').locator('svg circle').last();
+  const heldPosition = [await marker.getAttribute('cx'), await marker.getAttribute('cy')];
+  await next.click();
+  await expect(page.getByTestId('simulation-selected-time')).toContainText('2:00 / 3:30');
+  await expect(page.getByTestId('simulation-instruction')).toHaveText('Fixture: continue along test road');
+  expect([await marker.getAttribute('cx'), await marker.getAttribute('cy')]).toEqual(heldPosition);
+  await expect(page.getByTestId('sector-split-time-2')).toHaveText('1:00 split');
+  await expect(page.getByTestId('simulated-stop-duration-60')).toBeDisabled();
+  await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+  await page.getByTestId('simulation-end').click();
+  await expect(page.getByTestId('simulation-result-state')).toContainText('INSPECTION ONLY');
+  await finish(page, 60, 4_000, true);
+  await expect(page.getByTestId('sector-comparison-2')).toContainText('Previous replay 1:30');
+  await expect(page.getByTestId('sector-comparison-2')).toContainText('match');
+  expect(demo.requests()).toBe(1);
+  demo.assertHealthy();
+});
+
 test('scrubbed active runs keep the previous replay and synthetic-stop timing intact', async ({ page }) => {
   const demo = await openDemo(page);
   await page.getByTestId('simulated-stop-duration-30').click();
