@@ -1,6 +1,6 @@
 - [Expo workspace dependency alignment](expo-workspace-dependencies.md) — run a root install after changing React; filtered installs can leave shared-library peer links stale.
 - [Physical iPhone validation](iphone-validation.md) — the user confirmed Expo Go opens Sector and its screens work; do not infer live-navigation validation.
 - [Google native dependency checks](google-native-dependencies.md) — inspect the published podspec for native SDK pins and Swift Package Manager requirements, not just README compatibility claims.
-- [Mapbox prototype scope](prototype-navigation-scope.md) — user chose browser-testable Mapbox simulation before paid Apple or Google setup.
+- [Navigation priority](prototype-navigation-scope.md) — live navigation is next; keep simulations separate from real journeys and personal bests.
 - [Cold Expo browser capture](expo-preview-capture.md) — a first screenshot after restart can precede screen rendering; corroborate a blank capture before treating it as a regression.
 - [React Native Web test semantics](react-native-web-test-semantics.md) — icon glyphs can enter button names; selected button state may not become aria-selected.

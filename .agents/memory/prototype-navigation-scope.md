@@ -1,13 +1,13 @@
 ---
-name: Mapbox prototype before native navigation
-description: User-approved prototype direction before paid Apple or Google setup.
+name: Live navigation before leaderboards
+description: The user's current product priority and guardrails between simulated and real navigation.
 ---
 
-Continue with the existing Mapbox integration and an explicitly labelled route simulation before pursuing paid Apple or Google setup.
+Live turn-by-turn navigation is Sector's next major milestone; personal leaderboards follow.
 
-**Why:** The user asked whether a semi-working prototype could be built here before spending with Google and Apple, and approved continuing with the Mapbox simulation.
+**Why:** The user explicitly changed the roadmap to make live navigation the next major milestone.
 
-**How to apply:** Prioritize browser-testable prototype functionality. Keep simulated results separate from real journeys and personal bests. Do not treat this choice as approval to install a native navigation SDK, purchase accounts, or claim real-road guidance is validated.
+**How to apply:** Keep the existing Mapbox browser simulation clearly distinct from live navigation, real journeys, and personal bests. Decide the live-navigation provider and technical path before implementation. This priority change does not by itself authorize purchases, paid account setup, or native-build changes.
 
 ## Replay comparison semantics
 
