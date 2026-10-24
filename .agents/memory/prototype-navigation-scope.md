@@ -34,3 +34,11 @@ Remembering practice configuration must be an explicit opt-in and stay local: se
 **Why:** The user requested remembering practice setup without saving journeys or locations, with no accounts, GPS, or backend storage.
 
 **How to apply:** Preserve this privacy boundary when extending practice features. Keep saved searches separate, validate restored preferences before playback, and retain a clear forget/reset action.
+
+## Sector's core priority
+
+Personal leaderboards are the core of Sector. Treat verified individual best times and progress as the first leaderboard milestone; simulated practice results are not real performance records.
+
+**Why:** The user identified personal leaderboards as Sector's core product value.
+
+**How to apply:** Once planning leaderboard work, keep simulation data clearly separate from real activities and personal bests. Confirm whether the user means private self-comparison or rankings against other runners before defining broader visibility.
