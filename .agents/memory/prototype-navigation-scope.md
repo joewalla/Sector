@@ -26,3 +26,11 @@ Keep an unchanged Mapbox reference when adding an explicitly configured syntheti
 **Why:** A synthetic delay must never be presented as live traffic or measured driving. Placing it inside a selected sector, rather than on a boundary, gives unambiguous attribution to that sector.
 
 **How to apply:** Show the original estimate and added delay separately, include only consumed delay for early-ended runs, and freeze synthetic countdowns when playback is paused. Faster playback must not change the delay in simulation seconds.
+
+## Preference-only practice persistence
+
+Remembering practice configuration must be an explicit opt-in and stay local: sector count and bounded synthetic stop sector/duration values only. Do not expand it into saved journeys, locations, route geometry or steps, split results, or replay comparison baselines.
+
+**Why:** The user requested remembering practice setup without saving journeys or locations, with no accounts, GPS, or backend storage.
+
+**How to apply:** Preserve this privacy boundary when extending practice features. Keep saved searches separate, validate restored preferences before playback, and retain a clear forget/reset action.

@@ -34,9 +34,14 @@ export default function PrivacyScreen() {
           body="Place names you choose to save are stored on this device. They are not verified places, route data, or journey records."
         />
         <InfoPanel
+          icon="sliders"
+          title="Optional remembered practice settings"
+          body="Remembering is off by default. Only if you choose Save and remember practice settings, Sector stores your sector count (2–5) and up to three synthetic stops’ sector numbers and durations (10, 30, 60 or 120 seconds) locally on this device. Further configuration changes are remembered while opted in. Settings are validated and restored before playback, never during a running or paused simulation. No GPS, account or backend storage is needed. Use Forget saved settings & reset practice in a route preview to delete these settings, turn remembering off and restore 3 sectors with no stops. Saved searches are separate and unaffected."
+        />
+        <InfoPanel
           icon="cpu"
           title="Route simulations"
-          body="The London demo uses fixed example locations, not your GPS. Simulations replay Mapbox route estimates with any explicitly configured synthetic stop. These stops are not live traffic or measured driving. Simulations do not save journey records or change your bests."
+          body="The London demo uses fixed example locations, not your GPS. Simulations replay Mapbox route estimates with explicitly configured synthetic stops, not live traffic or measured driving. Mapbox geometry, route steps, destinations and their coordinates, split results and replay comparison baselines are never saved by practice settings. Replay data stays in memory and does not create journey records or change your bests."
         />
         <InfoPanel
           icon="shield"

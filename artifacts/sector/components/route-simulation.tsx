@@ -14,6 +14,7 @@ import SimulationSectorSplits from './simulation-sector-splits';
 import PracticeSectorConfig from './practice-sector-config';
 import SimulationStopConfig from './simulation-stop-config';
 import SimulationTimeSlider from './simulation-time-slider';
+import { PracticeSettingsControl, PracticeSettingsProvider, usePracticeSettings } from './practice-settings';
 
 type Status = 'idle' | 'running' | 'paused' | 'finished' | 'ended';
 const SPEEDS = [1, 20, 60, 120] as const;
@@ -33,6 +34,19 @@ function tap() {
 }
 
 export default function RouteSimulation({
+  route, destinationName,
+}: {
+  route: RoutePreviewResponse;
+  destinationName: string;
+}) {
+  return (
+    <PracticeSettingsProvider>
+      <RouteSimulationPlayback route={route} destinationName={destinationName} />
+    </PracticeSettingsProvider>
+  );
+}
+
+function RouteSimulationPlayback({
   route,
   destinationName,
 }: {
@@ -48,8 +62,8 @@ export default function RouteSimulation({
     }
   }, [route]);
   const reference = built.model;
-  const [sectorCount, setSectorCount] = useState<PracticeSectorCount>(3);
-  const [stopConfig, setStopConfig] = useState<SimulatedStopConfig[]>([]);
+  const practice = usePracticeSettings();
+  const { sectorCount, stops: stopConfig } = practice.settings;
   const configured = useMemo(() => reference ? configureSimulatedStops(reference, sectorCount, stopConfig) : null,
     [reference, sectorCount, stopConfig]);
   const model = configured?.model ?? null;
@@ -155,6 +169,16 @@ export default function RouteSimulation({
   const active = status === 'running' || status === 'paused';
   const done = status === 'finished' || status === 'ended';
 
+  if (!practice.ready) {
+    return (
+      <View style={styles.section} testID="practice-settings-loading">
+        <Text accessibilityLiveRegion="polite" style={[styles.body, { color: colors.mutedForeground }]}>
+          Checking optional saved practice settings before playback…
+        </Text>
+      </View>
+    );
+  }
+
   if (built.failed || !model || !sample) {
     return (
       <View style={styles.section} testID="route-simulation">
@@ -170,6 +194,7 @@ export default function RouteSimulation({
   }
 
   const start = () => {
+    if (practice.busy) return;
     tap();
     // Only a fully completed replay becomes the baseline; partial runs never overwrite it.
     if (lastCompleted) setBaseline(lastCompleted);
@@ -201,7 +226,7 @@ export default function RouteSimulation({
     go('idle');
   };
   const seek = (seconds: number) => {
-    if (!Number.isFinite(seconds)) return;
+    if (practice.busy || !Number.isFinite(seconds)) return;
     // Inspection always pauses, including at the endpoint. Only Restart starts a clean replay.
     inspectionRef.current = true;
     setInspectionOnly(true);
@@ -212,17 +237,16 @@ export default function RouteSimulation({
     setElapsed(next);
   };
   const changeSectorCount = (next: PracticeSectorCount) => {
-    if (statusRef.current === 'running' || statusRef.current === 'paused' || next === sectorCount) return;
+    if (practice.busy || statusRef.current === 'running' || statusRef.current === 'paused' || next === sectorCount) return;
     tap();
-    setSectorCount(next);
-    setStopConfig((previous) => previous.map((stop) => ({ ...stop, sectorId: Math.min(stop.sectorId, next) })));
+    practice.update({ sectorCount: next, stops: stopConfig.map((stop) => ({ ...stop, sectorId: Math.min(stop.sectorId, next) })) });
     resetConfiguration();
   };
   const changeStopConfig = (next: SimulatedStopConfig[]) => {
-    if (statusRef.current === 'running' || statusRef.current === 'paused'
+    if (practice.busy || statusRef.current === 'running' || statusRef.current === 'paused'
       || JSON.stringify(next) === JSON.stringify(stopConfig)) return;
     tap();
-    setStopConfig(next);
+    practice.update({ sectorCount, stops: next });
     resetConfiguration();
   };
 
@@ -232,9 +256,10 @@ export default function RouteSimulation({
     <View style={styles.section} testID="route-simulation">
       <Eyebrow>ROUTE SIMULATION · NOT REAL DRIVING</Eyebrow>
       {sectors ? (
-        <PracticeSectorConfig count={sectorCount} sectors={sectors} locked={active} onChange={changeSectorCount} />
+        <PracticeSectorConfig count={sectorCount} sectors={sectors} locked={active || practice.busy} onChange={changeSectorCount} />
       ) : null}
-      <SimulationStopConfig value={stopConfig} sectorCount={sectorCount} locked={active} onChange={changeStopConfig} />
+      <SimulationStopConfig value={stopConfig} sectorCount={sectorCount} locked={active || practice.busy} onChange={changeStopConfig} />
+      <PracticeSettingsControl locked={active} onReset={resetConfiguration} />
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.heading, { color: colors.foreground }]}>Inspect route time</Text>
@@ -273,12 +298,14 @@ export default function RouteSimulation({
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.heading, { color: colors.foreground }]}>Rehearse this route</Text>
           <Text style={[styles.body, { color: colors.mutedForeground }]}>
-            Plays back the real Mapbox geometry and {model.stepCount} steps using Mapbox estimates{hasStops ? ' plus your synthetic stops' : ''}. No GPS is used and nothing is persisted.
+            Plays back the real Mapbox geometry and {model.stepCount} steps using Mapbox estimates{hasStops ? ' plus your synthetic stops' : ''}. No GPS is used. Route and replay data stay in memory; practice settings are saved only if you opt in above.
           </Text>
           <SpeedPicker speed={speed} onChange={setSpeed} />
           <Pressable
             accessibilityRole="button"
             testID="simulation-start"
+            disabled={practice.busy}
+            accessibilityState={{ disabled: practice.busy }}
             onPress={start}
             style={({ pressed }) => [styles.primary, { backgroundColor: colors.primary }, pressed && styles.pressed]}
           >
@@ -403,7 +430,7 @@ export default function RouteSimulation({
       <InfoPanel
         icon="cpu"
         title="Simulation only"
-        body="No GPS, no background tracking and no persistence. Movement follows Mapbox estimates; optional synthetic stops add a labelled stationary delay."
+        body="No GPS or background tracking. Route and replay data are not saved. Only practice settings can be remembered with your opt-in. Movement follows Mapbox estimates; optional synthetic stops add a labelled stationary delay."
       />
     </View>
   );
