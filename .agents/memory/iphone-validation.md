@@ -9,6 +9,12 @@ On 2026-10-23, the user confirmed “It opens and the screens work” in Expo Go
 
 **How to apply:** Treat the SDK mismatch and initial screen-opening check as resolved. This confirmation does not establish live GPS guidance, voice prompts, rerouting, sector timing, or background reliability.
 
+The user later confirmed in Expo Go on a physical iPhone that the practice-time slider reaches both endpoints, reverses direction during a drag, works within the scrolling search screen, and supports VoiceOver adjustments. Seeks pause playback and mark the run inspection-only; practice settings remain locked while running or paused and unlock when the run ends. The iOS edge-swipe back gesture was disabled on the search screen after it intercepted slider drags, and the user confirmed the slider then worked.
+
+**Why:** These are device-only gesture, accessibility, and navigation results; browser regressions cannot establish them.
+
+**How to apply:** Treat those specific iPhone checks as confirmed, but do not infer Android behavior or live-navigation reliability.
+
 ## Native guidance compatibility is not device validation
 
 The published `@rnmapbox/navigation` alpha documentation checked on 2026-10-23 says its Expo plugin is tested with SDK 58, but explicitly lists live, non-simulated device guidance and release builds as untested.
