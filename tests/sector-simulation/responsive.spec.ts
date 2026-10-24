@@ -64,17 +64,53 @@ async function readable(locator: Locator) {
   expect(bounds.clipped).toBe(false);
 }
 
-async function noHorizontalOverflow(page: Page) {
-  const overflow = await page.getByTestId('route-simulation').evaluate((root) =>
-    [root, ...root.querySelectorAll<HTMLElement>('*')].flatMap((element) => {
+async function noHorizontalOverflow(page: Page, skipRoutePreview = false) {
+  const overflow = await page.getByTestId('route-simulation').evaluate((root, skipPreview) => {
+    const svg = root.querySelector('svg[aria-label="Route shape preview, not a basemap"]');
+    const preview = skipPreview ? svg?.parentElement?.parentElement : null;
+    return [root, ...root.querySelectorAll<HTMLElement>('*')].flatMap((element) => {
+      // Route badges and their one-line destination label are rendered by the
+      // separate route-preview component; this assertion targets simulation UI.
+      if (preview?.contains(element)) return [];
       const rect = element.getBoundingClientRect();
       if (!rect.width || !rect.height) return [];
       return rect.left < -1 || rect.right > innerWidth + 1 || element.scrollWidth > element.clientWidth + 1
         ? [element.getAttribute('data-testid') ?? element.textContent?.slice(0, 100) ?? element.tagName]
         : [];
-    }));
+    });
+  }, skipRoutePreview);
   expect(overflow).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+}
+
+async function noFlexSiblingOverlap(page: Page) {
+  const overlaps = await page.getByTestId('route-simulation').evaluate((root) => {
+    const svg = root.querySelector('svg[aria-label="Route shape preview, not a basemap"]');
+    const preview = svg?.parentElement?.parentElement;
+    return [...root.querySelectorAll<HTMLElement>('*')].flatMap((container) => {
+      if (preview?.contains(container)) return [];
+      const style = getComputedStyle(container);
+      if (style.display !== 'flex' || style.flexDirection !== 'row') return [];
+      const children = [...container.children].filter((child): child is HTMLElement => {
+        if (!(child instanceof HTMLElement)) return false;
+        const rect = child.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && getComputedStyle(child).position !== 'absolute';
+      });
+      const collisions: string[] = [];
+      for (let left = 0; left < children.length; left++) {
+        const a = children[left].getBoundingClientRect();
+        for (let right = left + 1; right < children.length; right++) {
+          const b = children[right].getBoundingClientRect();
+          if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1
+            && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1) {
+            collisions.push(container.getAttribute('data-testid') ?? container.tagName);
+          }
+        }
+      }
+      return collisions;
+    });
+  });
+  expect(overlaps).toEqual([]);
 }
 
 // A real Tab transition, not just programmatic focus on the target.
@@ -230,3 +266,100 @@ for (const viewport of [
     healthy();
   });
 }
+
+test('enlarged browser text and a 200% effective zoom keep simulation content reachable', async ({ page }, testInfo) => {
+  // A 400x720 layout viewport viewed at 200% has roughly 200x360 CSS pixels.
+  // Reducing the Playwright viewport exercises the same reflow pressure; the
+  // extra text multiplier also catches fixed-height line boxes in RN Web.
+  await page.setViewportSize({ width: 200, height: 360 });
+  const healthy = await openLayoutFixture(page);
+  await page.getByTestId('route-simulation').evaluate((root) => {
+    const svg = root.querySelector('svg[aria-label="Route shape preview, not a basemap"]');
+    const preview = svg?.parentElement?.parentElement;
+    const measured = [root, ...root.querySelectorAll<HTMLElement>('*')]
+      .filter((element) => !preview?.contains(element))
+      .map((element) => {
+        const computed = getComputedStyle(element);
+        return {
+          element,
+          fontSize: Number.parseFloat(computed.fontSize),
+          lineHeight: Number.parseFloat(computed.lineHeight),
+        };
+      });
+    for (const { element, fontSize, lineHeight } of measured) {
+      if (Number.isFinite(fontSize)) element.style.setProperty('font-size', `${fontSize * 1.5}px`, 'important');
+      if (Number.isFinite(lineHeight)) element.style.setProperty('line-height', `${lineHeight * 1.5}px`, 'important');
+    }
+  });
+
+  const sectors = page.getByRole('radiogroup', { name: 'Number of practice sectors' });
+  await readable(sectors);
+  for (let sector = 3; sector <= 5; sector++) {
+    await readable(page.getByRole('radio', { name: `${sector} equal-distance practice sectors`, exact: true }));
+  }
+  await page.getByRole('radio', { name: '5 equal-distance practice sectors', exact: true }).click();
+  await page.getByRole('radio', { name: 'Stop 1: 30 simulated seconds', exact: true }).click();
+  for (let index = 0; index < 2; index++) await page.getByTestId('simulated-stop-add').click();
+  for (const stop of [1, 2, 3]) {
+    await readable(page.getByRole('radiogroup', { name: `Stop ${stop}: duration`, exact: true }));
+    for (const duration of [0, 10, 30, 60, 120]) {
+      await readable(page.getByRole('radio', {
+        name: `Stop ${stop}: ${duration === 0 ? 'No simulated stop' : `${duration} simulated seconds`}`,
+        exact: true,
+      }));
+    }
+    const duration = page.getByRole('radio', { name: `Stop ${stop}: 30 simulated seconds`, exact: true });
+    await duration.click();
+    await readable(page.getByRole('radiogroup', { name: `Stop ${stop}: practice sector`, exact: true }));
+    for (let sector = 1; sector <= 5; sector++) {
+      await readable(page.getByRole('radio', { name: `Stop ${stop} in sector ${sector}`, exact: true }));
+    }
+    await page.getByRole('radio', { name: `Stop ${stop} in sector 5`, exact: true }).click();
+  }
+
+  await noHorizontalOverflow(page, true);
+  await noFlexSiblingOverlap(page);
+  await page.getByRole('radio', { name: '1 times playback speed', exact: true }).click();
+  const start = page.getByRole('button', { name: 'Start simulation', exact: true });
+  await readable(start);
+  await start.click();
+  await expect(page.getByTestId('simulation-instruction')).toHaveText(longInstruction);
+  await expect(page.getByTestId('simulation-next-instruction')).toHaveText(`Next: ${longNext}`);
+  await readable(page.getByTestId('simulation-instruction'));
+  await readable(page.getByTestId('simulation-next-instruction'));
+  for (const label of ['Previous instruction', 'Next instruction', 'Pause']) {
+    await readable(page.getByRole('button', { name: label, exact: true }));
+  }
+  await noHorizontalOverflow(page, true);
+  await noFlexSiblingOverlap(page);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await readable(page.getByRole('button', { name: 'Resume', exact: true }));
+  await readable(page.getByRole('button', { name: 'Restart', exact: true }));
+  await readable(page.getByRole('button', { name: 'End early', exact: true }));
+  await page.getByRole('button', { name: 'Resume', exact: true }).click();
+  await page.getByTestId('simulation-speed-120').click();
+  await page.clock.runFor(4_000);
+  await expect(page.getByTestId('simulation-result-state')).toHaveText('SIMULATION COMPLETE');
+  for (const sector of [1, 2, 3, 4, 5]) await readable(page.getByTestId(`sector-split-${sector}`));
+  await readable(page.getByRole('button', { name: 'Simulate again', exact: true }));
+  await noHorizontalOverflow(page, true);
+  await noFlexSiblingOverlap(page);
+  await page.getByTestId('simulation-again').click();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.getByTestId('simulation-speed-1').click();
+  await page.getByRole('button', { name: 'Resume', exact: true }).click();
+  await page.clock.runFor(50_000);
+  await page.getByRole('button', { name: 'End early', exact: true }).click();
+  await expect(page.getByTestId('sector-state-1')).toHaveText('COMPLETE');
+  await expect(page.getByTestId('sector-state-2')).toHaveText('PARTIAL');
+  for (const sector of [1, 2, 3, 4, 5]) {
+    await readable(page.getByTestId(`sector-split-${sector}`));
+    await readable(page.getByTestId(`sector-comparison-${sector}`));
+  }
+  await noHorizontalOverflow(page, true);
+  await noFlexSiblingOverlap(page);
+  await testInfo.attach('enlarged-browser-text-partial-comparisons', {
+    body: await page.screenshot(), contentType: 'image/png',
+  });
+  healthy();
+});

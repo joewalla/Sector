@@ -17,3 +17,9 @@ grouped synthetic-stop overlays.
 These are render-output contract checks, not a mounted React lifecycle test
 or physical iOS/Android SDK verification. Device map mounting, gestures and
 native camera behavior are not established by this suite.
+
+The practice text-scaling source guard checks that the simulation, sector
+configuration, stop configuration and split screens do not disable native
+React Native text scaling or clamp text with `numberOfLines`. It does not
+measure native Dynamic Type/font-scale layout; that still requires a physical
+iOS or Android device.

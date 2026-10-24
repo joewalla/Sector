@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
   rowBetween: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   tag: { fontSize: 9, fontWeight: '700', letterSpacing: 0.9 },
-  body: { fontSize: 12, lineHeight: 18 },
+  body: { fontSize: 12 },
   row: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 6 },
   sector: { fontSize: 15, fontWeight: '700', letterSpacing: -0.3 },
   meta: { fontSize: 10, fontVariant: ['tabular-nums'] },

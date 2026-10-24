@@ -91,10 +91,10 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 10 },
   heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontSize: 14, fontWeight: '700' },
-  body: { fontSize: 12, lineHeight: 18 },
+  body: { fontSize: 12 },
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   option: { flexGrow: 1, flexBasis: 44, minHeight: 44, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   optionText: { fontSize: 14, fontWeight: '700' },
-  note: { fontSize: 10, lineHeight: 16 },
+  note: { fontSize: 10 },
   pressed: { opacity: 0.72 },
 });

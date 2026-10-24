@@ -35,6 +35,12 @@ Coverage:
   keyboard Tab focus indicators and activation, pause/resume/restart/end actions,
   and completed/partial comparisons with horizontal-overflow checks at each state.
   Run only this focused suite with `pnpm test:sector:browser responsive.spec.ts`.
+- Enlarged-browser-text layout uses a 200x360 CSS viewport (the reflow pressure
+  of a 400x720 viewport at 200% zoom) plus 150% computed text/line-height scaling.
+  It checks all five sectors, three stops, long instructions, playback controls,
+  completed/partial comparisons, and horizontal clipping. This is a browser
+  simulation and does not establish native iOS Dynamic Type or Android font-scale
+  behavior; see `tests/sector-native/README.md`.
 - Accelerated completion and matching replay at another speed.
 - Pause/resume, restart, completed/partial/not-reached splits.
 - Retention of a completed baseline after a partial run.
