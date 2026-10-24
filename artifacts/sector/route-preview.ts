@@ -17,10 +17,7 @@ const routePreviewSchema = z.object({
     maneuverType: z.string(),
     distanceMeters: nonnegativeMetric,
     durationSeconds: nonnegativeMetric,
-  })).min(1).refine(
-    (steps) => steps.some((step) => step.distanceMeters > 0 || step.durationSeconds > 0),
-    'No usable movement instructions',
-  ),
+  })).min(1),
 });
 
 /** Generated client types are not runtime validation of an untrusted response. */

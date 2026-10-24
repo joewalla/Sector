@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { failedRouteFixture, londonFixture, malformedRouteEnvelopeFixtures, placesFixture, unavailableRouteFixture, unusableRouteFixtures } from './fixtures';
+import { arrivalOnlyFixture, failedRouteFixture, londonFixture, malformedRouteEnvelopeFixtures, placesFixture, singleMovingInstructionFixture, unequalStepDurationsFixture, unavailableRouteFixture, unusableRouteFixtures, zeroDurationMovingStepFixture } from './fixtures';
 import { practiceStorageHarness } from './practice-settings-harness';
 
 const corsHeaders = {
@@ -332,8 +332,8 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-async function openDemo(page: Page) {
-  let response = londonFixture();
+async function openDemo(page: Page, initialRoute = londonFixture()) {
+  let response = initialRoute;
   let requests = 0;
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -702,6 +702,99 @@ test('instruction shortcuts pause at each turn and arrival with synchronized mar
   expect(demo.requests()).toBe(1);
   demo.assertHealthy();
 });
+
+const unusualShortcutCases = [
+  {
+    name: 'unequal raw step durations normalize to the route timeline',
+    route: unequalStepDurationsFixture(),
+    duration: 240,
+    stages: [
+      { seconds: 40, instruction: 'Fixture: second unequal segment', markerCircle: 2, states: ['COMPLETE', 'CURRENT', 'NOT REACHED'], splits: ['0:40 split', '0:00 split', '--:-- split'] },
+      { seconds: 160, instruction: 'Fixture: third unequal segment', markerCircle: 3, states: ['COMPLETE', 'COMPLETE', 'CURRENT'], splits: ['0:40 split', '2:00 split', '0:00 split'] },
+      { seconds: 240, instruction: 'Fixture: arrived', markerCircle: 1, states: ['COMPLETE', 'COMPLETE', 'COMPLETE'], splits: ['0:40 split', '2:00 split', '1:20 split'] },
+    ],
+    previousSeconds: 160,
+    previousInstruction: 'Fixture: third unequal segment',
+  },
+  {
+    name: 'a positive-distance zero-duration step receives a simulation interval',
+    route: zeroDurationMovingStepFixture(),
+    duration: 120,
+    stages: [
+      { seconds: 60, instruction: 'Fixture: timed moving segment', markerCircle: 2, states: ['COMPLETE', 'CURRENT', 'NOT REACHED'], splits: ['1:00 split', '0:00 split', '--:-- split'] },
+      { seconds: 120, instruction: 'Fixture: arrived', markerCircle: 1, states: ['COMPLETE', 'COMPLETE', 'COMPLETE'], splits: ['1:00 split', '0:30 split', '0:30 split'] },
+    ],
+    previousSeconds: 60,
+    previousInstruction: 'Fixture: timed moving segment',
+  },
+  {
+    name: 'a single moving instruction jumps directly to arrival',
+    route: singleMovingInstructionFixture(),
+    duration: 180,
+    stages: [
+      { seconds: 180, instruction: 'Fixture: arrived', markerCircle: 1, states: ['COMPLETE', 'COMPLETE', 'COMPLETE'], splits: ['1:00 split', '1:00 split', '1:00 split'] },
+    ],
+    previousSeconds: 0,
+    previousInstruction: 'Fixture: follow the road',
+  },
+  {
+    name: 'arrival-only input uses the model fallback segment',
+    route: arrivalOnlyFixture(),
+    duration: 180,
+    stages: [
+      { seconds: 180, instruction: 'Fixture: arrived', markerCircle: 1, states: ['COMPLETE', 'COMPLETE', 'COMPLETE'], splits: ['1:00 split', '1:00 split', '1:00 split'] },
+    ],
+    previousSeconds: 0,
+    previousInstruction: 'Follow the route to your destination',
+    initialInstruction: 'Follow the route to your destination',
+  },
+] as const;
+
+for (const scenario of unusualShortcutCases) {
+  test(`instruction shortcuts stay aligned when ${scenario.name}`, async ({ page }) => {
+    const demo = await openDemo(page, scenario.route);
+    const previous = page.getByRole('button', { name: 'Previous instruction', exact: true });
+    const next = page.getByRole('button', { name: 'Next instruction', exact: true });
+    const instruction = page.getByTestId('simulation-instruction');
+    const selectedTime = page.getByTestId('simulation-selected-time');
+    const map = page.getByTestId('route-simulation').locator('svg circle');
+    const marker = map.last();
+
+    await expect(previous).toBeDisabled();
+    await expect(next).toBeEnabled();
+    if (scenario.initialInstruction) {
+      await page.getByTestId('simulation-start').click();
+      await expect(instruction).toHaveText(scenario.initialInstruction);
+    }
+
+    for (const stage of scenario.stages) {
+      await next.click();
+      await expect(selectedTime).toContainText(`${Math.floor(stage.seconds / 60)}:${String(stage.seconds % 60).padStart(2, '0')} / ${Math.floor(scenario.duration / 60)}:${String(scenario.duration % 60).padStart(2, '0')}`);
+      await expect(instruction).toHaveText(stage.instruction);
+      if (stage.seconds === scenario.duration) await expect(next).toBeDisabled();
+      else await expect(next).toBeEnabled();
+
+      const expectedMarker = map.nth(stage.markerCircle);
+      expect([await marker.getAttribute('cx'), await marker.getAttribute('cy')])
+        .toEqual([await expectedMarker.getAttribute('cx'), await expectedMarker.getAttribute('cy')]);
+
+      for (const [index, state] of stage.states.entries()) {
+        await expect(page.getByTestId(`sector-state-${index + 1}`)).toHaveText(state);
+      }
+      for (const [index, split] of stage.splits.entries()) {
+        await expect(page.getByTestId(`sector-split-time-${index + 1}`)).toHaveText(split);
+      }
+    }
+
+    await expect(previous).toBeEnabled();
+    await previous.click();
+    await expect(selectedTime).toContainText(`${Math.floor(scenario.previousSeconds / 60)}:${String(scenario.previousSeconds % 60).padStart(2, '0')} /`);
+    await expect(instruction).toHaveText(scenario.previousInstruction);
+    await expect(next).toBeEnabled();
+    expect(demo.requests()).toBe(1);
+    demo.assertHealthy();
+  });
+}
 
 test('instruction shortcuts follow synthetic-stop transitions and retain the completed baseline', async ({ page }) => {
   const demo = await openDemo(page);

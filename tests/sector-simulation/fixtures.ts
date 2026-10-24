@@ -21,6 +21,47 @@ export function londonFixture(durationSeconds = 180) {
   };
 }
 
+/** Raw step times deliberately differ from the route total; playback normalizes them. */
+export function unequalStepDurationsFixture() {
+  const route = londonFixture(240);
+  route.steps = [
+    { instruction: 'Fixture: first unequal segment', roadName: 'Test road A', distanceMeters: 300, durationSeconds: 10, maneuverType: 'depart' },
+    { instruction: 'Fixture: second unequal segment', roadName: 'Test road B', distanceMeters: 300, durationSeconds: 30, maneuverType: 'continue' },
+    { instruction: 'Fixture: third unequal segment', roadName: 'Test road C', distanceMeters: 300, durationSeconds: 20, maneuverType: 'continue' },
+    { instruction: 'Fixture: arrived', roadName: '', distanceMeters: 0, durationSeconds: 0, maneuverType: 'arrive' },
+  ];
+  return route;
+}
+
+/** A positive-distance step with no API time receives a normalized fallback interval. */
+export function zeroDurationMovingStepFixture() {
+  const route = londonFixture(120);
+  route.steps = [
+    { instruction: 'Fixture: zero-duration moving segment', roadName: 'Test road A', distanceMeters: 300, durationSeconds: 0, maneuverType: 'depart' },
+    { instruction: 'Fixture: timed moving segment', roadName: 'Test road B', distanceMeters: 600, durationSeconds: 40, maneuverType: 'continue' },
+    { instruction: 'Fixture: arrived', roadName: '', distanceMeters: 0, durationSeconds: 0, maneuverType: 'arrive' },
+  ];
+  return route;
+}
+
+export function singleMovingInstructionFixture() {
+  const route = londonFixture(180);
+  route.steps = [
+    { instruction: 'Fixture: follow the road', roadName: 'Test road', distanceMeters: 900, durationSeconds: 45, maneuverType: 'depart' },
+    { instruction: 'Fixture: arrived', roadName: '', distanceMeters: 0, durationSeconds: 0, maneuverType: 'arrive' },
+  ];
+  return route;
+}
+
+/** No moving step is supplied, so the simulation model provides its fallback instruction. */
+export function arrivalOnlyFixture() {
+  const route = londonFixture(180);
+  route.steps = [
+    { instruction: 'Fixture: arrived', roadName: '', distanceMeters: 0, durationSeconds: 0, maneuverType: 'arrive' },
+  ];
+  return route;
+}
+
 export const unavailableRouteFixture = { error: 'Synthetic fixture: route service unavailable' };
 export const failedRouteFixture = { error: 'Synthetic fixture: route provider failed' };
 
@@ -52,10 +93,6 @@ export function malformedRouteEnvelopeFixtures() {
     json('missing steps', withoutSteps),
     json('null steps', { ...route, steps: null }),
     json('empty steps', { ...route, steps: [] }),
-    json('zero-weight steps', { ...route, steps: route.steps.map((step) => ({
-      ...step, distanceMeters: 0, durationSeconds: 0,
-    })) }),
-    json('arrival-only steps', { ...route, steps: [route.steps[3]] }),
     json('blank instruction', { ...route, steps: [{ ...route.steps[0], instruction: '  ' }] }),
     json('non-array steps', { ...route, steps: {} }),
     json('null instruction step', { ...route, steps: [null] }),
