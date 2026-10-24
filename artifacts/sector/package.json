@@ -56,6 +56,8 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@rnmapbox/maps": "10.3.11",
+    "@rnmapbox/navigation": "0.1.0-alpha.1",
     "expo-dev-client": "~58.0.14",
     "react-native-maps": "1.29.11"
   }

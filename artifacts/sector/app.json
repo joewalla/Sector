@@ -28,7 +28,19 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Sector uses your location once when you request a route preview."
+          "locationWhenInUsePermission": "Sector uses your location for route previews and to guide you during an active journey."
+        }
+      ],
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsVersion": "11.23.1"
+        }
+      ],
+      [
+        "@rnmapbox/navigation",
+        {
+          "locationWhenInUsePermission": "Sector uses your location for route previews and to guide you during an active journey."
         }
       ]
     ],
