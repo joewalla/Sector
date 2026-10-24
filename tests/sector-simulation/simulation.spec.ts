@@ -384,6 +384,15 @@ async function expectCompleteSplits(page: Page, seconds: string, compared = fals
   }
 }
 
+async function expectMapPracticeStopNumbers(page: Page, expectedNumbers: number[]) {
+  const labels = await page.getByTestId('route-simulation').locator('svg text').allTextContents();
+  const actualNumbers = labels
+    .filter((label) => label.startsWith('SIM '))
+    .flatMap((label) => label.match(/\d+/g)?.map(Number) ?? [])
+    .sort((a, b) => a - b);
+  expect(actualNumbers).toEqual([...expectedNumbers].sort((a, b) => a - b));
+}
+
 test.describe('saved practice settings', () => {
   const saved = { version: 1, sectorCount: 4, stops: [{ sectorId: 2, durationSeconds: 30 }] };
   const seed = JSON.stringify(saved);
@@ -1015,6 +1024,45 @@ test('three-stop scenarios lock every edit and replay identically before configu
   await page.getByTestId('simulated-stop-add').click();
   await finish(page, 120, 2_500);
   await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+  expect(demo.requests()).toBe(1);
+  demo.assertHealthy();
+});
+
+test('configured stop numbers stay aligned between choices, map badges, and an ended result', async ({ page }) => {
+  const demo = await openDemo(page);
+
+  // Deliberately configure sector 3, then 1, then 2: display order is not route order.
+  await page.getByTestId('simulated-stop-duration-30').click();
+  await page.getByTestId('simulated-stop-sector-3').click();
+  await page.getByTestId('simulated-stop-add').click();
+  await page.getByTestId('simulated-stop-add').click();
+  await page.getByTestId('simulated-stop-3-sector-2').click();
+  await expectMapPracticeStopNumbers(page, [1, 2, 3]);
+
+  // Turning the middle entry off removes it and shifts the later entry's number.
+  await page.getByTestId('simulated-stop-2-duration-0').click();
+  await expectMapPracticeStopNumbers(page, [1, 2]);
+
+  // Re-add a stop, then remove another entry to confirm numbering closes up again.
+  await page.getByTestId('simulated-stop-add').click();
+  await expectMapPracticeStopNumbers(page, [1, 2, 3]);
+  await page.getByTestId('simulated-stop-2-duration-0').click();
+  await expectMapPracticeStopNumbers(page, [1, 2]);
+  await expect(page.getByTestId('simulated-stop-config')).toContainText('+30s in S3');
+  await expect(page.getByTestId('simulated-stop-config')).toContainText('+30s in S1');
+
+  // Stop 2 is in S1 and occurs first in route order; end halfway through its hold.
+  await page.getByTestId('simulation-start').click();
+  await page.clock.runFor(2_250); // 45 simulated seconds: 30 moving + 15 holding.
+  await expect(page.getByText('Synthetic stop · 15s left', { exact: true })).toBeVisible();
+  await expectMapPracticeStopNumbers(page, [1, 2]);
+  await page.getByTestId('simulation-end').click();
+
+  await expect(page.getByTestId('simulation-result-state')).toHaveText('SIMULATION ENDED EARLY');
+  await expectMapPracticeStopNumbers(page, [1, 2]);
+  await expect(page.getByText(/Stop 1 · S3: \+0:00 of 0:30 configured \(not reached\)/)).toBeVisible();
+  await expect(page.getByText(/Stop 2 · S1: \+0:15 of 0:30 configured \(partial\)/)).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('sector.practice-settings.v1'))).toBeNull();
   expect(demo.requests()).toBe(1);
   demo.assertHealthy();
 });
