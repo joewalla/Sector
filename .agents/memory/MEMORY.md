@@ -4,3 +4,4 @@
 - [Navigation priority](prototype-navigation-scope.md) — live navigation is next; keep simulations separate from real journeys and personal bests.
 - [Cold Expo browser capture](expo-preview-capture.md) — a first screenshot after restart can precede screen rendering; corroborate a blank capture before treating it as a regression.
 - [React Native Web test semantics](react-native-web-test-semantics.md) — icon glyphs affect names; custom radio roles need explicit checked state and web-only arrow handling.
+- [Native map test fixtures](native-map-fixtures.md) — label fixture geometry as synthetic and keep native map recovery checks independent of live GPS.

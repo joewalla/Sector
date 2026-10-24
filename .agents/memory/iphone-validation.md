@@ -21,6 +21,12 @@ On 2026-10-24, the user confirmed that tapping Search's visible Back button on t
 
 **How to apply:** Treat the Search Back-button path as confirmed on iPhone; do not infer the same behavior on Android.
 
+On 2026-10-24, the user confirmed the synthetic malformed-then-valid native map recovery check worked as expected on their iPhone.
+
+**Why:** Native map lifecycle behavior must be verified on a device; a passing component stub test is not equivalent.
+
+**How to apply:** Treat this recovery sequence as confirmed on iPhone only. Android native map recovery remains unverified.
+
 ## Native guidance compatibility is not device validation
 
 The published `@rnmapbox/navigation` alpha documentation checked on 2026-10-23 says its Expo plugin is tested with SDK 58, but explicitly lists live, non-simulated device guidance and release builds as untested.

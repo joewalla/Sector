@@ -238,6 +238,18 @@ export default function HomeScreen() {
             Location & privacy
           </Text>
         </Pressable>
+        {__DEV__ ? (
+          <Pressable
+            accessibilityRole="button"
+            testID="native-map-recovery-check"
+            onPress={() => router.push('/map-recovery-check')}
+            style={[styles.privacyLink, { paddingVertical: 10 }]}
+          >
+            <Text style={[styles.privacyText, { color: colors.mutedForeground }]}>
+              Development only · synthetic native map recovery check
+            </Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </ScreenShell>
   );

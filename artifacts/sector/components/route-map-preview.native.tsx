@@ -56,7 +56,7 @@ export default function RouteMapPreview({
       key={`${destinationName}-${route.durationSeconds}`}
       style={{ height: 250, borderRadius: 16, overflow: 'hidden' }}
       initialRegion={initialRegion}
-      accessibilityLabel="Map showing the real route preview"
+      accessibilityLabel="Map showing the route preview"
     >
       <Polyline
         coordinates={route.geometry.map(({ latitude, longitude }) => ({ latitude, longitude }))}
