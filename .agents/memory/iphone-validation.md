@@ -21,4 +21,4 @@ The published `@rnmapbox/navigation` alpha documentation checked on 2026-10-23 s
 
 **Why:** Passing the plugin's platform requirements is not evidence that real-road guidance is reliable. The published plugin includes React Native 0.88 Swift framework handling, but no native build of Sector with this bridge has been validated.
 
-**How to apply:** Recheck the upstream [known limitations](https://rnmapbox.github.io/docs/navigation/overview#known-limitations) before proceeding. Establish a supported custom-native build path before installing the bridge; the current Expo Go preview cannot validate it.
+**How to apply:** Recheck the upstream [known limitations](https://rnmapbox.github.io/docs/navigation/overview#known-limitations) before proceeding. Replit currently does not support EAS builds or custom native binaries, so establish an external native-build path before installing the bridge. Expo Go and the browser preview cannot validate real navigation.
