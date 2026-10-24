@@ -93,9 +93,16 @@ export function BackHeader({
   return (
     <View style={styles.backHeader}>
       <Pressable
+        testID="back-button"
         accessibilityRole="button"
         accessibilityLabel="Go back"
-        onPress={() => router.back()}
+        onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/');
+          }
+        }}
         style={({ pressed }) => [
           styles.backButton,
           { backgroundColor: colors.card, borderColor: colors.border },

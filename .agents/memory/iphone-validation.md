@@ -15,6 +15,12 @@ The user later confirmed in Expo Go on a physical iPhone that the practice-time 
 
 **How to apply:** Treat those specific iPhone checks as confirmed, but do not infer Android behavior or live-navigation reliability.
 
+On 2026-10-24, the user confirmed that tapping Search's visible Back button on their iPhone returns to the screen that opened Search.
+
+**Why:** This validates the native navigation action that replaces the disabled edge-swipe gesture.
+
+**How to apply:** Treat the Search Back-button path as confirmed on iPhone; do not infer the same behavior on Android.
+
 ## Native guidance compatibility is not device validation
 
 The published `@rnmapbox/navigation` alpha documentation checked on 2026-10-23 says its Expo plugin is tested with SDK 58, but explicitly lists live, non-simulated device guidance and release builds as untested.
