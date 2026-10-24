@@ -19,6 +19,17 @@ export default function RouteMapPreview({
   practiceStops?: PracticeStopMarker[];
 }) {
   const colors = useColors();
+  // Reject the whole shape rather than dropping bad points and drawing a
+  // replacement route. Keep invalid coordinates away from native map props.
+  if (!Array.isArray(route.geometry) || route.geometry.length < 2
+    || Array.from(route.geometry).some((point) => !point || !Number.isFinite(point.latitude)
+      || !Number.isFinite(point.longitude) || Math.abs(point.latitude) > 90 || Math.abs(point.longitude) > 180)) {
+    return (
+      <Text style={[styles.note, { color: colors.mutedForeground }]}>
+        Route shape unavailable. No replacement geometry has been generated.
+      </Text>
+    );
+  }
   const longitudes = route.geometry.map((point) => point.longitude);
   const latitudes = route.geometry.map((point) => point.latitude);
   const minLongitude = Math.min(...longitudes);
@@ -109,6 +120,7 @@ export default function RouteMapPreview({
 }
 
 const styles = StyleSheet.create({
+  note: { fontSize: 11, textAlign: 'center', paddingTop: 11 },
   stopAnchor: { width: 10, height: 10, borderWidth: 2 },
   stopBadge: { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 3, paddingHorizontal: 8, paddingVertical: 4 },
   stopLabel: { fontSize: 11, fontWeight: '700' },
