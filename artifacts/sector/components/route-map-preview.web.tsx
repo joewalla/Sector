@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Polyline, Text as SvgText, G } from 'react-native-svg';
+import Svg, { Circle, Line, Polyline, Rect, Text as SvgText, G } from 'react-native-svg';
 import type { RoutePreviewResponse } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { clusterPracticeStops, type PracticeStopMarker } from '@/simulation/practice-stop-markers';
 
 const WIDTH = 360;
 const HEIGHT = 220;
@@ -12,12 +13,14 @@ export default function RouteMapPreview({
   destinationName,
   position,
   sectorBoundaries,
+  practiceStops,
 }: {
   route: RoutePreviewResponse;
   destinationName: string;
   position?: { latitude: number; longitude: number } | null;
   /** Simulation-only internal sector ends. Destination is the final sector end. */
   sectorBoundaries?: { id: number; position: { latitude: number; longitude: number } }[];
+  practiceStops?: PracticeStopMarker[];
 }) {
   const colors = useColors();
   if (!Array.isArray(route.geometry) || route.geometry.length < 2
@@ -50,6 +53,11 @@ export default function RouteMapPreview({
       }
     : null;
   const end = points.split(' ').at(-1)!.split(',').map(Number);
+  const stopGroups = clusterPracticeStops((practiceStops ?? []).map((stop) => ({
+    ...stop,
+    x: PADDING + ((stop.position.longitude - minLongitude) / longitudeSpan) * (WIDTH - PADDING * 2),
+    y: HEIGHT - PADDING - ((stop.position.latitude - minLatitude) / latitudeSpan) * (HEIGHT - PADDING * 2),
+  })));
 
   return (
     <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -73,20 +81,43 @@ export default function RouteMapPreview({
             <Circle cx={marker.x} cy={marker.y} r={7} fill={colors.foreground} stroke={colors.background} strokeWidth={3} />
           </>
         ) : null}
+        {stopGroups.map((group) => {
+          const width = 24 + group.label.length * 6;
+          const x = Math.max(width / 2 + 4, Math.min(WIDTH - width / 2 - 4, group.x));
+          const y = Math.min(HEIGHT - 14, group.y + 28);
+          return (
+            <G key={group.key} accessibilityLabel={group.description}>
+              {group.members.map((stop) => (
+                <G key={stop.number}>
+                  <Line x1={stop.x} y1={stop.y} x2={x} y2={y} stroke={colors.foreground} strokeDasharray="3 3" />
+                  <Rect x={stop.x - 4} y={stop.y - 4} width={8} height={8} fill={colors.card} stroke={colors.foreground} strokeWidth={2} />
+                </G>
+              ))}
+              <Rect x={x - width / 2} y={y - 11} width={width} height={22} rx={3} fill={colors.card} stroke={colors.foreground} strokeDasharray="4 3" />
+              <SvgText x={x} y={y + 4} textAnchor="middle" fill={colors.foreground} fontSize={11} fontWeight="700">{group.label}</SvgText>
+            </G>
+          );
+        })}
       </Svg>
       <View style={styles.labels}>
         <Text style={[styles.label, { color: colors.mutedForeground }]}>START</Text>
         <Text numberOfLines={1} style={[styles.label, styles.destination, { color: colors.foreground }]}>{destinationName}</Text>
       </View>
       <Text style={[styles.note, { color: colors.mutedForeground }]}>Actual Mapbox route shape · {position ? 'simulated position · ' : ''}diagram only, not a map</Text>
+      {stopGroups.length ? (
+        <Text style={[styles.stopNote, { color: colors.foreground }]}>
+          Dashed SIM badges = synthetic practice stops. Nearby labels grouped; squares show positions. Not roadside stops or GPS tracking.
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { height: 290, borderWidth: 1, borderRadius: 16, overflow: 'hidden', paddingTop: 14 },
+  container: { minHeight: 290, borderWidth: 1, borderRadius: 16, overflow: 'hidden', paddingTop: 14, paddingBottom: 14 },
   labels: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, gap: 12 },
   label: { fontSize: 9, fontWeight: '700', letterSpacing: 0.8 },
   destination: { flex: 1, textAlign: 'right' },
   note: { fontSize: 9, textAlign: 'center', paddingTop: 11 },
+  stopNote: { fontSize: 11, lineHeight: 16, paddingHorizontal: 14, paddingTop: 10 },
 });

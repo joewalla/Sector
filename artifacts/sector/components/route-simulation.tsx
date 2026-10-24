@@ -7,7 +7,7 @@ import type { RoutePreviewResponse } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { Eyebrow, InfoPanel } from '@/components/sector-ui';
 import RouteMapPreview from './route-map-preview';
-import { advancePlaybackClock, buildSimulationRoute, sampleSimulation } from '@/simulation/route-simulation';
+import { advancePlaybackClock, buildSimulationRoute, sampleSimulation, simulationPositionAtDistance } from '@/simulation/route-simulation';
 import { buildSimulationSectors, sampleSectorSplits, type PracticeSectorCount } from '@/simulation/sector-timing';
 import { configureSimulatedStops, sampleSimulatedStop, type SimulatedStopConfig } from '@/simulation/simulated-stop';
 import SimulationSectorSplits from './simulation-sector-splits';
@@ -69,6 +69,10 @@ function RouteSimulationPlayback({
   const model = configured?.model ?? null;
   const stops = configured?.stops;
   const hasStops = !!stops?.length;
+  const practiceStops = useMemo(() => reference ? stops?.map((stop) => ({
+    number: stop.configIndex + 1,
+    position: simulationPositionAtDistance(reference, stop.meters),
+  })) : undefined, [reference, stops]);
   const referenceSectors = useMemo(() => reference ? buildSimulationSectors(reference, sectorCount) : null, [reference, sectorCount]);
   const sectors = useMemo(() => model ? buildSimulationSectors(model, sectorCount) : null, [model, sectorCount]);
   // Memory-only practice comparison. Cleared on unmount (parent keys this component by route).
@@ -270,6 +274,9 @@ function RouteSimulationPlayback({
       ) : null}
       <SimulationStopConfig value={stopConfig} sectorCount={sectorCount} locked={active || practice.busy} onChange={changeStopConfig} />
       <PracticeSettingsControl locked={active} onReset={resetConfiguration} />
+      {!active ? (
+        <RouteMapPreview route={route} destinationName={destinationName} position={sample.position} sectorBoundaries={boundaries} practiceStops={practiceStops} />
+      ) : null}
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.heading, { color: colors.foreground }]}>Inspect route time</Text>
@@ -394,7 +401,7 @@ function RouteSimulationPlayback({
             </View>
           </View>
 
-          <RouteMapPreview route={route} destinationName={destinationName} position={sample.position} sectorBoundaries={boundaries} />
+          <RouteMapPreview route={route} destinationName={destinationName} position={sample.position} sectorBoundaries={boundaries} practiceStops={practiceStops} />
           <SpeedPicker speed={speed} onChange={setSpeed} />
           <View style={styles.controls}>
             <Control icon={status === 'running' ? 'pause' : 'play'} label={status === 'running' ? 'Pause' : 'Resume'} onPress={togglePause} primary testID="simulation-toggle" />
