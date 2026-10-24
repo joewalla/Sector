@@ -303,6 +303,7 @@ function RouteSimulationPlayback({
           <SpeedPicker speed={speed} onChange={setSpeed} />
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Start simulation"
             testID="simulation-start"
             disabled={practice.busy}
             accessibilityState={{ disabled: practice.busy }}
@@ -339,7 +340,7 @@ function RouteSimulationPlayback({
                   : status === 'paused' ? (autoPaused ? 'PAUSED · SCREEN LEFT' : 'PAUSED') : `SIMULATING ${speed}x`}
               </Text>
             </View>
-            <Text accessibilityLiveRegion="polite" style={[styles.instruction, { color: colors.foreground }]}>
+            <Text testID="simulation-instruction" accessibilityLiveRegion="polite" style={[styles.instruction, { color: colors.foreground }]}>
               {sample.instruction}
             </Text>
             <Text style={[styles.distance, { color: colors.primary }]}>
@@ -349,7 +350,7 @@ function RouteSimulationPlayback({
             {sample.nextInstruction ? (
               <View style={[styles.next, { borderColor: colors.border }]}>
                 <Feather name="corner-down-right" size={14} color={colors.mutedForeground} />
-                <Text numberOfLines={2} style={[styles.nextText, { color: colors.mutedForeground }]}>
+                <Text testID="simulation-next-instruction" style={[styles.nextText, { color: colors.mutedForeground }]}>
                   Next: {sample.nextInstruction}
                 </Text>
               </View>
@@ -417,6 +418,7 @@ function RouteSimulationPlayback({
           </Text>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Simulate again"
             testID="simulation-again"
             onPress={start}
             style={({ pressed }) => [styles.primary, { backgroundColor: colors.primary }, pressed && styles.pressed]}
@@ -456,6 +458,7 @@ function SpeedPicker({ speed, onChange }: { speed: Speed; onChange: (s: Speed) =
           <Pressable
             key={s}
             accessibilityRole="radio"
+            accessibilityLabel={`${s} times playback speed`}
             accessibilityState={{ selected }}
             testID={`simulation-speed-${s}`}
             onPress={() => {
@@ -516,7 +519,7 @@ const styles = StyleSheet.create({
   primaryText: { fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
   instructionCard: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 8 },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  rowBetween: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8 },
   tag: { fontSize: 9, fontWeight: '700', letterSpacing: 0.9 },
   instruction: { fontSize: 22, lineHeight: 28, fontWeight: '700', letterSpacing: -0.6 },
   distance: { fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
@@ -531,9 +534,9 @@ const styles = StyleSheet.create({
   speeds: { flexDirection: 'row', borderRadius: 12, padding: 4, gap: 4 },
   speed: { flex: 1, minHeight: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   speedText: { fontSize: 12, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  controls: { flexDirection: 'row', gap: 8 },
+  controls: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   seekPoints: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   seekPoint: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 10 },
-  control: { flex: 1, minHeight: 48, borderWidth: 1, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  control: { flexGrow: 1, flexBasis: 90, minHeight: 48, paddingHorizontal: 8, borderWidth: 1, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   controlText: { fontSize: 12, fontWeight: '700' },
 });

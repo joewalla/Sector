@@ -36,7 +36,7 @@ export default function SimulationStopConfig({
             testID={index === 0 ? `simulated-stop-${kind}-${option}` : `simulated-stop-${index + 1}-${kind}-${option}`}
             accessibilityRole="radio"
             accessibilityLabel={kind === 'duration'
-              ? option === 0 ? 'No simulated stop' : `${option} simulated seconds`
+              ? `Stop ${index + 1}: ${option === 0 ? 'No simulated stop' : `${option} simulated seconds`}`
               : `Stop ${index + 1} in sector ${option}`}
             accessibilityState={{ selected, disabled: locked }}
             disabled={locked}
@@ -111,8 +111,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 14, fontWeight: '700' },
   body: { fontSize: 12, lineHeight: 18 },
   note: { fontSize: 10, lineHeight: 16 },
-  options: { flexDirection: 'row', gap: 5 },
-  option: { flex: 1, minHeight: 44, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  option: { flexGrow: 1, flexBasis: 40, minHeight: 44, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   optionText: { fontSize: 12, fontWeight: '700' },
   pressed: { opacity: 0.72 },
 });

@@ -21,6 +21,11 @@ controlled clock; hidden/focus lifecycle events are dispatched explicitly so
 headless tab visibility does not decide the outcome.
 
 Coverage:
+- Responsive layouts at 320px and 375px phone widths and a 1440px desktop:
+  five-sector/three-stop radio controls, full long current/upcoming instructions,
+  keyboard Tab focus indicators and activation, pause/resume/restart/end actions,
+  and completed/partial comparisons with horizontal-overflow checks at each state.
+  Run only this focused suite with `pnpm test:sector:browser responsive.spec.ts`.
 - Accelerated completion and matching replay at another speed.
 - Pause/resume, restart, completed/partial/not-reached splits.
 - Retention of a completed baseline after a partial run.
