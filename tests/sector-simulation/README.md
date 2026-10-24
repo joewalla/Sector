@@ -21,6 +21,15 @@ controlled clock; hidden/focus lifecycle events are dispatched explicitly so
 headless tab visibility does not decide the outcome.
 
 Coverage:
+- Saved practice settings: explicit opt-in, whitelisted automatic updates and
+  browser-reload restoration, forget/reset comparison clearing (including unchanged
+  defaults), running/paused locks, a held asynchronous initial read blocking
+  playback, corrupt/unsupported/invalid saved data, read/write/removal failures,
+  unsaved fallback defaults, preserved older bytes, and explicit retries.
+  Run only these checks with `pnpm test:sector:browser --grep 'saved practice settings'`.
+  The key-scoped browser storage harness lives only in the tests. Its delayed-read
+  thenable is assimilated by AsyncStorage's real web Promise; it does not block
+  the JS thread, inject production hooks, or wait for arbitrary timeouts.
 - Responsive layouts at 320px and 375px phone widths and a 1440px desktop:
   five-sector/three-stop radio controls, full long current/upcoming instructions,
   keyboard Tab focus indicators and activation, pause/resume/restart/end actions,

@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { failedRouteFixture, londonFixture, placesFixture, unavailableRouteFixture, unusableRouteFixtures } from './fixtures';
+import { practiceStorageHarness } from './practice-settings-harness';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -310,6 +311,218 @@ async function expectCompleteSplits(page: Page, seconds: string, compared = fals
     if (compared) await expect(page.getByTestId(`sector-comparison-${id}`)).toContainText('match');
   }
 }
+
+test.describe('saved practice settings', () => {
+  const saved = { version: 1, sectorCount: 4, stops: [{ sectorId: 2, durationSeconds: 30 }] };
+  const seed = JSON.stringify(saved);
+  const readError = 'Saved settings could not be read or were invalid. Using defaults; nothing new will be saved unless you opt in. You can retry saving or forget them.';
+  const saveError = 'Could not save these settings. They work for this preview, but an older saved version may remain. Retry saving or forget them.';
+  const savedMessage = 'Practice settings saved on this device. Future changes will be remembered.';
+  const forgotMessage = 'Forgot saved practice settings. Reset to 3 sectors and no stops; remembering is off.';
+
+  async function defaults(page: Page) {
+    await expect(page.getByTestId('sector-state-3')).toHaveText('ESTIMATE');
+    await expect(page.getByTestId('sector-state-4')).toHaveCount(0);
+    await expect(page.getByTestId('simulated-stop-config')).toContainText('Off · replay only the Mapbox route estimate.');
+    await expect(page.getByTestId('practice-settings-remember')).toHaveText('Save and remember practice settings');
+  }
+
+  async function expectStored(storage: Awaited<ReturnType<typeof practiceStorageHarness>>, value: unknown) {
+    await expect.poll(async () => {
+      const { raw } = await storage.snapshot();
+      return raw === null ? null : JSON.parse(raw);
+    }).toEqual(value);
+  }
+
+  test('saving requires explicit opt-in; later sector and stop edits update only whitelisted settings and restore on reload', async ({ page }) => {
+    const storage = await practiceStorageHarness(page);
+    const demo = await openDemo(page);
+    await defaults(page);
+    await expect(page.getByTestId('practice-settings-status')).toHaveText('Not saved. Remembering is optional.');
+    await page.getByTestId('practice-sector-count-4').click();
+    await page.getByTestId('simulated-stop-duration-30').click();
+    await page.getByTestId('simulated-stop-sector-2').click();
+    expect(await storage.snapshot()).toMatchObject({ raw: null, calls: { write: 0, remove: 0 } });
+    await page.getByTestId('practice-settings-remember').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(savedMessage);
+    await expectStored(storage, saved);
+    await page.getByTestId('practice-sector-count-5').click();
+    await expectStored(storage, { ...saved, sectorCount: 5 });
+    await page.getByTestId('simulated-stop-duration-60').click();
+    await expectStored(storage, { ...saved, sectorCount: 5, stops: [{ sectorId: 2, durationSeconds: 60 }] });
+    await page.getByTestId('simulated-stop-add').click();
+    const latest = { ...saved, sectorCount: 5, stops: [{ sectorId: 2, durationSeconds: 60 }, { sectorId: 1, durationSeconds: 30 }] };
+    await expectStored(storage, latest);
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(savedMessage);
+    await page.reload();
+    await page.getByTestId('london-demo').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText('Saved settings restored. Changes will be remembered on this device.');
+    await expect(page.getByTestId('sector-state-5')).toHaveText('ESTIMATE');
+    await expect(page.getByTestId('simulated-stop-config')).toContainText('+60s in S2');
+    await expect(page.getByTestId('simulated-stop-config')).toContainText('+30s in S1');
+    expect(await storage.snapshot()).toMatchObject({ calls: { write: 0, remove: 0 } });
+    // A restored opt-in is still active, not merely a one-time load.
+    await page.getByTestId('simulated-stop-2-duration-0').click();
+    await expectStored(storage, { ...latest, stops: [latest.stops[0]] });
+    demo.assertHealthy();
+  });
+
+  test('forget resets defaults, clears even an identical-configuration comparison, and disables automatic saving', async ({ page }) => {
+    const storage = await practiceStorageHarness(page);
+    const demo = await openDemo(page);
+    await page.getByTestId('practice-settings-remember').click();
+    await expectStored(storage, { version: 1, sectorCount: 3, stops: [] });
+    await finish(page, 120, 2_000);
+    await finish(page, 120, 2_000, true);
+    await expectCompleteSplits(page, '1:00', true);
+    // The settings already equal defaults: comparison clearing must come from
+    // onReset, not just a changed sector/stop configuration.
+    await page.getByTestId('practice-settings-forget').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(forgotMessage);
+    await defaults(page);
+    await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+    await expect(page.getByTestId('simulation-start')).toBeVisible();
+    expect((await storage.snapshot()).raw).toBeNull();
+    await finish(page, 120, 2_000);
+    await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+    await page.getByTestId('practice-sector-count-4').click();
+    await page.getByTestId('simulated-stop-duration-60').click();
+    expect(await storage.snapshot()).toMatchObject({ raw: null, calls: { write: 1, remove: 1 } });
+    await page.reload();
+    await page.getByTestId('london-demo').click();
+    await defaults(page);
+    await expect(page.getByTestId('practice-settings-status')).toHaveText('Not saved. Remembering is optional.');
+    demo.assertHealthy();
+  });
+
+  test('save and forget controls stay locked during running and paused playback without touching storage', async ({ page }) => {
+    const storage = await practiceStorageHarness(page, { seed });
+    const demo = await openDemo(page);
+    await page.getByTestId('simulation-start').click();
+    for (const state of ['SIMULATING 20x', 'PAUSED']) {
+      await expect(page.getByTestId('simulation-playback-state')).toHaveText(state);
+      for (const id of ['practice-settings-remember', 'practice-settings-forget', 'practice-sector-count-5', 'simulated-stop-duration-60']) {
+        await expect(page.getByTestId(id)).toBeDisabled();
+        // A programmatic click also exercises the rendered disabled handler.
+        await page.getByTestId(id).dispatchEvent('click');
+      }
+      await expect(page.getByTestId('practice-settings')).toContainText('End playback before saving or resetting settings.');
+      expect(await storage.snapshot()).toMatchObject({ raw: seed, calls: { write: 0, remove: 0 } });
+      if (state === 'SIMULATING 20x') await page.getByTestId('simulation-toggle').click();
+    }
+    await page.getByTestId('simulation-end').click();
+    await expect(page.getByTestId('practice-settings-remember')).toBeEnabled();
+    await expect(page.getByTestId('practice-settings-forget')).toBeEnabled();
+    demo.assertHealthy();
+  });
+
+  test('a held initial read blocks playback until restored settings replace defaults', async ({ page }) => {
+    const storage = await practiceStorageHarness(page, { seed, holdRead: true });
+    const harness = await recoveryHarness(page);
+    await page.getByTestId('london-demo').click();
+    await harness.reply(await harness.take(), londonFixture());
+    await expect(page.getByTestId('practice-settings-loading')).toBeVisible();
+    await expect.poll(async () => (await storage.snapshot()).calls.read).toBe(1);
+    await expectNoReplay(page);
+    await expect(page.getByTestId('practice-sector-count-3')).toHaveCount(0);
+    await expect(page.getByTestId('practice-settings-remember')).toHaveCount(0);
+    expect(await storage.snapshot()).toMatchObject({ raw: seed, calls: { write: 0, remove: 0 } });
+    await storage.release();
+    await expect(page.getByTestId('practice-settings-loading')).toHaveCount(0);
+    await expect(page.getByTestId('practice-settings-status')).toContainText('Saved settings restored.');
+    await expect(page.getByTestId('sector-state-4')).toHaveText('ESTIMATE');
+    await expect(page.getByTestId('simulated-stop-config')).toContainText('+30s in S2');
+    await expect(page.getByTestId('simulation-selected-time')).toContainText('0:00 / 3:30');
+    await page.getByTestId('simulation-start').click();
+    await expect(page.getByTestId('simulation-playback-state')).toHaveText('SIMULATING 20x');
+    await expect(page.getByTestId('sector-state-4')).toHaveText('NOT REACHED');
+    await harness.healthy();
+  });
+
+  for (const corrupt of [
+    { name: 'malformed JSON', raw: '{broken' },
+    { name: 'unsupported version', raw: JSON.stringify({ ...saved, version: 99 }) },
+    { name: 'invalid stop sector', raw: JSON.stringify({ ...saved, stops: [{ sectorId: 5, durationSeconds: 30 }] }) },
+    { name: 'read failure', raw: seed, fail: 'read' as const },
+  ]) {
+    test(`${corrupt.name} shows an accurate read warning and unsaved defaults until explicit retry`, async ({ page }) => {
+      const storage = await practiceStorageHarness(page, { seed: corrupt.raw, fail: corrupt.fail });
+      const demo = await openDemo(page);
+      await expect(page.getByTestId('practice-settings-status')).toHaveText(readError);
+      await defaults(page);
+      await page.getByTestId('practice-sector-count-2').click();
+      await page.getByTestId('simulated-stop-duration-10').click();
+      await finish(page, 120, 2_000);
+      await expect(page.getByTestId('practice-settings-status')).toHaveText(readError);
+      expect(await storage.snapshot()).toMatchObject({ raw: corrupt.raw, calls: { write: 0, remove: 0 } });
+      await storage.fail('read', false);
+      await page.getByTestId('practice-settings-remember').click();
+      await expect(page.getByTestId('practice-settings-status')).toHaveText(savedMessage);
+      await expectStored(storage, { version: 1, sectorCount: 2, stops: [{ sectorId: 1, durationSeconds: 10 }] });
+      demo.assertHealthy();
+    });
+  }
+
+  test('failed first save does not opt in; explicit retry saves the current preview and enables updates', async ({ page }) => {
+    const storage = await practiceStorageHarness(page, { fail: 'write' });
+    const demo = await openDemo(page);
+    await page.getByTestId('practice-settings-remember').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(saveError);
+    await expect(page.getByTestId('practice-settings-remember')).toHaveText('Save and remember practice settings');
+    await page.getByTestId('practice-sector-count-4').click();
+    await page.getByTestId('simulated-stop-duration-10').click();
+    expect(await storage.snapshot()).toMatchObject({ raw: null, calls: { write: 1 } });
+    await finish(page, 120, 2_000);
+    await storage.fail('write', false);
+    await page.getByTestId('practice-settings-remember').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(savedMessage);
+    await expectStored(storage, { version: 1, sectorCount: 4, stops: [{ sectorId: 1, durationSeconds: 10 }] });
+    await page.getByTestId('simulated-stop-duration-60').click();
+    await expectStored(storage, { version: 1, sectorCount: 4, stops: [{ sectorId: 1, durationSeconds: 60 }] });
+    demo.assertHealthy();
+  });
+
+  test('failed automatic update preserves older bytes, keeps the new preview usable, and can be retried', async ({ page }) => {
+    const storage = await practiceStorageHarness(page, { seed, fail: 'write' });
+    const demo = await openDemo(page);
+    await page.getByTestId('practice-sector-count-5').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(saveError);
+    await expect(page.getByTestId('practice-settings-remember')).toHaveText('Save practice settings again');
+    expect(await storage.snapshot()).toMatchObject({ raw: seed, calls: { write: 1 } });
+    await finish(page, 120, 2_000);
+    await expect(page.getByTestId('sector-state-5')).toHaveText('COMPLETE');
+    await storage.fail('write', false);
+    await page.getByTestId('practice-settings-remember').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(savedMessage);
+    await expectStored(storage, { ...saved, sectorCount: 5 });
+    demo.assertHealthy();
+  });
+
+  test('failed forget never reports success or resets settings/comparisons; retry really removes and resets', async ({ page }) => {
+    const storage = await practiceStorageHarness(page, { seed, fail: 'remove' });
+    const demo = await openDemo(page);
+    await finish(page, 120, 2_000);
+    await finish(page, 120, 2_000, true);
+    await expect(page.getByTestId('sector-comparison-2')).toContainText('match');
+    await page.getByTestId('practice-settings-forget').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText('Could not forget saved settings. Nothing was reset. Please try again.');
+    await expect(page.getByText(forgotMessage, { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('sector-state-4')).toHaveText('COMPLETE');
+    await expect(page.getByTestId('simulated-stop-config')).toContainText('+30s in S2');
+    await expect(page.getByTestId('sector-comparison-2')).toContainText('match');
+    await expect(page.getByTestId('practice-settings-remember')).toHaveText('Save practice settings again');
+    expect(await storage.snapshot()).toMatchObject({ raw: seed, calls: { write: 0, remove: 1 } });
+    await storage.fail('remove', false);
+    await page.getByTestId('practice-settings-forget').click();
+    await expect(page.getByTestId('practice-settings-status')).toHaveText(forgotMessage);
+    await defaults(page);
+    await expect(page.getByTestId('sector-comparison-2')).toHaveCount(0);
+    expect(await storage.snapshot()).toMatchObject({ raw: null, calls: { write: 0, remove: 2 } });
+    await finish(page, 120, 2_000);
+    await expect(page.getByTestId('sector-comparison-1')).toHaveCount(0);
+    demo.assertHealthy();
+  });
+});
 
 test('complete accelerated replay and second playback speed produce matching splits', async ({ page }, testInfo) => {
   const demo = await openDemo(page);
