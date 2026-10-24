@@ -40,7 +40,7 @@ export default function SimulationStopConfig({
               ? `Stop ${index + 1}: ${option === 0 ? 'No simulated stop' : `${option} simulated seconds`}`
               : `Stop ${index + 1} in sector ${option}`}
             aria-checked={selected}
-            accessibilityState={{ disabled: locked }}
+            accessibilityState={{ checked: selected, disabled: locked }}
             tabIndex={radioOptionTabIndex(selected, locked)}
             disabled={locked}
             onPress={() => update(index, kind === 'duration'

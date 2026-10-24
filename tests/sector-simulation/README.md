@@ -36,6 +36,15 @@ Coverage:
   keyboard Tab focus indicators and activation, pause/resume/restart/end actions,
   and completed/partial comparisons with horizontal-overflow checks at each state.
   Run only this focused suite with `pnpm test:sector:browser responsive.spec.ts`.
+- Radio accessibility: the sector-count, simulated-stop duration/sector, and
+  playback-speed groups expose their accessible names and checked choices; selected
+  sector and stop options retain checked and disabled states while paused. On web,
+  these are checked through React Native Web's ARIA semantics. Native radio options
+  also receive React Native `accessibilityState.checked` and `disabled` for VoiceOver
+  and TalkBack. Their exact spoken phrasing can vary by OS and screen-reader version;
+  headless browser tests verify the accessibility semantics, not synthesized speech
+  or native announcements. Confirming actual VoiceOver/TalkBack speech requires device
+  testing.
 - Enlarged-browser-text layout uses a 200x360 CSS viewport (the reflow pressure
   of a 400x720 viewport at 200% zoom) plus 150% computed text/line-height scaling.
   It checks all five sectors, three stops, long instructions, playback controls,

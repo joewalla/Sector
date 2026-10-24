@@ -125,6 +125,64 @@ async function keyboardNext(page: Page, from: Locator, target: Locator) {
   })).toBe(true);
 }
 
+test('practice radio groups expose their accessible names, checked choices, and locked state', async ({ page }) => {
+  const healthy = await openLayoutFixture(page);
+
+  // Playwright role/name/checked queries use the browser accessibility semantics,
+  // rather than relying on the visible text alone.
+  const sectors = page.getByRole('radiogroup', { name: 'Number of practice sectors', exact: true });
+  await expect(sectors).toBeVisible();
+  const sector3 = page.getByRole('radio', { name: '3 equal-distance practice sectors', exact: true });
+  const sector4 = page.getByRole('radio', { name: '4 equal-distance practice sectors', exact: true });
+  await expect(sector3).toBeChecked();
+  await expect(sector4).not.toBeChecked();
+  await sector4.click();
+  await expect(sector4).toBeChecked();
+  await expect(sector3).not.toBeChecked();
+
+  const durations = page.getByRole('radiogroup', { name: 'Stop 1: duration', exact: true });
+  const noStop = page.getByRole('radio', { name: 'Stop 1: No simulated stop', exact: true });
+  await expect(durations).toBeVisible();
+  await expect(noStop).toBeChecked();
+  const thirtySeconds = page.getByRole('radio', { name: 'Stop 1: 30 simulated seconds', exact: true });
+  await thirtySeconds.click();
+  await expect(thirtySeconds).toBeChecked();
+  await expect(noStop).not.toBeChecked();
+
+  const stopSectors = page.getByRole('radiogroup', { name: 'Stop 1: practice sector', exact: true });
+  const stopInSector1 = page.getByRole('radio', { name: 'Stop 1 in sector 1', exact: true });
+  const stopInSector2 = page.getByRole('radio', { name: 'Stop 1 in sector 2', exact: true });
+  await expect(stopSectors).toBeVisible();
+  await expect(stopInSector1).toBeChecked();
+  await stopInSector2.click();
+  await expect(stopInSector2).toBeChecked();
+  await expect(stopInSector1).not.toBeChecked();
+
+  const speeds = page.getByRole('radiogroup', { name: 'Playback speed', exact: true });
+  const speed20 = page.getByRole('radio', { name: '20 times playback speed', exact: true });
+  const speed60 = page.getByRole('radio', { name: '60 times playback speed', exact: true });
+  await expect(speeds).toBeVisible();
+  await expect(speed20).toBeChecked();
+  await speed60.click();
+  await expect(speed60).toBeChecked();
+  await expect(speed20).not.toBeChecked();
+
+  await page.getByRole('button', { name: 'Start simulation', exact: true }).click();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+  await expect(sector4).toBeChecked();
+  await expect(sector4).toBeDisabled();
+  await expect(thirtySeconds).toBeChecked();
+  await expect(thirtySeconds).toBeDisabled();
+  await expect(stopInSector2).toBeChecked();
+  await expect(stopInSector2).toBeDisabled();
+  // Playback speed remains adjustable while the route's practice configuration is locked.
+  await expect(speed60).toBeChecked();
+  await expect(speed60).toBeEnabled();
+
+  healthy();
+});
+
 for (const viewport of [
   { width: 320, height: 568 },
   { width: 375, height: 667 },

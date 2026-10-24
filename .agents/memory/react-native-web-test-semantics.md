@@ -14,3 +14,9 @@ For custom radio controls on React Native Web, set `aria-checked` explicitly; `a
 **Why:** A radio must expose its checked state to assistive technology, and the default focusability of every Pressable does not provide standard radio-group keyboard behavior.
 
 **How to apply:** Verify the rendered `aria-checked` and `tabIndex` attributes in browser tests, and test arrow navigation without relying on React Native props that map to a different ARIA attribute.
+
+For cross-platform custom radios, expose checked state in both places: explicit `aria-checked` for React Native Web and `accessibilityState.checked` for native VoiceOver/TalkBack semantics. Include `accessibilityState.disabled` when choices lock.
+
+**Why:** React Native Web's tested ARIA behavior does not establish what native assistive technologies receive; their state comes from React Native accessibility props.
+
+**How to apply:** Assert web role, name, checked, and disabled semantics in browser tests, and keep native checked/disabled props on every custom radio. Device screen-reader speech still needs device validation.

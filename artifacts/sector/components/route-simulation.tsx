@@ -490,6 +490,7 @@ function SpeedPicker({ speed, onChange }: { speed: Speed; onChange: (s: Speed) =
             accessibilityRole="radio"
             accessibilityLabel={`${s} times playback speed`}
             aria-checked={selected}
+            accessibilityState={{ checked: selected }}
             tabIndex={radioOptionTabIndex(selected)}
             testID={`simulation-speed-${s}`}
             onKeyDown={(event) => handleRadioGroupArrowKey(event, SPEEDS, onChange)}

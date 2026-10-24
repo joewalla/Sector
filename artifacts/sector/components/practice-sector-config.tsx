@@ -46,7 +46,7 @@ export default function PracticeSectorConfig({
               accessibilityRole="radio"
               accessibilityLabel={`${value} equal-distance practice sectors`}
               aria-checked={selected}
-              accessibilityState={{ disabled: locked }}
+              accessibilityState={{ checked: selected, disabled: locked }}
               tabIndex={radioOptionTabIndex(selected, locked)}
               disabled={locked}
               onPress={() => onChange(value)}
