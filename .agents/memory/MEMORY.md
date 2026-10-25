@@ -5,3 +5,4 @@
 - [Cold Expo browser capture](expo-preview-capture.md) — a first screenshot after restart can precede screen rendering; corroborate a blank capture before treating it as a regression.
 - [React Native Web test semantics](react-native-web-test-semantics.md) — custom radios need web ARIA checked state and native checked/disabled accessibility props.
 - [Native map test fixtures](native-map-fixtures.md) — label fixture geometry as synthetic and keep native map recovery checks independent of live GPS.
+- [EAS build toolchain pinning](eas-build-toolchain.md) — pin the remote builder's Node and pnpm versions; GitHub runner settings do not control EAS workers.
