@@ -31,8 +31,9 @@ native compilation only; it does not verify live GPS guidance on a real phone.
 EAS commands and configuration live in this app directory, as required for the
 Expo app in this pnpm monorepo. The workspace root declares pnpm 10.26.1 and
 the EAS profile pins the same package-manager version for remote builds. The
-GitHub runner installs dependencies from the workspace root before submitting
-a cloud build.
+simulator profile uses a documented Xcode 27.0 image to satisfy the native
+React Native toolchain requirement. The GitHub runner installs dependencies
+from the workspace root before submitting a cloud build.
 
 ## Targets
 
