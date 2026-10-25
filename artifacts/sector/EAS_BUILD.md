@@ -11,8 +11,9 @@ native compilation only; it does not verify live GPS guidance on a real phone.
 ## Before running the GitHub workflow
 
 1. Use the GitHub repository containing Sector and enable GitHub Actions.
-2. Create or link an Expo project for Sector. Set its project ID in
-   `app.json` as `expo.extra.eas.projectId`.
+2. Create or link an Expo project for Sector. Make sure `expo.slug` matches the
+   Expo project slug, and set its project ID in `app.json` as
+   `expo.extra.eas.projectId`.
 3. Choose unique `expo.ios.bundleIdentifier` and `expo.android.package` values.
 4. Add an Expo access token named `EXPO_TOKEN` under the repository's
    **Settings → Secrets and variables → Actions**. Never commit the token or
