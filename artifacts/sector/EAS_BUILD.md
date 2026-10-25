@@ -28,8 +28,10 @@ native compilation only; it does not verify live GPS guidance on a real phone.
    workflow checks dependency alignment before it queues a build.
 
 EAS commands and configuration live in this app directory, as required for the
-Expo app in this pnpm monorepo. The GitHub runner installs dependencies from
-the workspace root before submitting a cloud build.
+Expo app in this pnpm monorepo. The workspace root declares pnpm 10.26.1 and
+the EAS profile pins the same package-manager version for remote builds. The
+GitHub runner installs dependencies from the workspace root before submitting
+a cloud build.
 
 ## Targets
 

@@ -5,7 +5,6 @@
       "distribution": "internal",
       "node": "22.13.1",
       "pnpm": "10.26.1",
-      "corepack": true,
       "android": {
         "buildType": "apk"
       }
