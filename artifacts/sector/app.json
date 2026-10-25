@@ -8,9 +8,12 @@
     "scheme": "sector",
     "userInterfaceStyle": "dark",
     "ios": {
+      "bundleIdentifier": "com.joewalla.sector",
       "supportsTablet": false
     },
-    "android": {},
+    "android": {
+      "package": "com.joewalla.sector"
+    },
     "web": {
       "favicon": "./assets/images/icon.png",
       "output": "single"
